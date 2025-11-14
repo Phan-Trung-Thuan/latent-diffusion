@@ -721,6 +721,9 @@ class UNetModel(nn.Module):
         ), "must specify y if and only if the model is class-conditional"
         hs = []
         t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False)
+
+        # FIX dtype mismatch issue:
+        t_emb = t_emb.to(x.dtype)
         emb = self.time_embed(t_emb)
 
         if self.num_classes is not None:
