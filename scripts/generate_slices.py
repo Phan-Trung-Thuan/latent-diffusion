@@ -54,7 +54,7 @@ def splice(left, right):
 @torch.no_grad()
 def ddim_step(sampler, x, c, uc, t_index):
     t = torch.tensor([sampler.ddim_timesteps[t_index]], device=x.device, dtype=x.dtype)
-    print(x.dtype, c.dtype, t.dtype)
+    c = c.to(t.device)
     x_prev, pred_x0 = sampler.p_sample_ddim(
         x, c, t, index=t_index,
         unconditional_guidance_scale=5.0,
