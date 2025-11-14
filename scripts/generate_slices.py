@@ -124,7 +124,7 @@ def generate_next_slice(sampler, model, prompt, prev_latents):
 # ==================================================
 def decode_slice(model, final_latent):
     decoder_dtype = next(model.first_stage_model.parameters()).dtype
-    latent = latent.to(device=model.device, dtype=decoder_dtype)
+    final_latent = final_latent.to(device=model.device, dtype=decoder_dtype)
     decoded = model.decode_first_stage(final_latent)
     decoded = torch.clamp((decoded + 1) / 2, 0, 1)
     img = (decoded[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
