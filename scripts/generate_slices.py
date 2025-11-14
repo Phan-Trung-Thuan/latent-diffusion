@@ -56,7 +56,6 @@ def ddim_step(sampler, x, c, uc, t_index):
     t = torch.tensor([sampler.ddim_timesteps[t_index]], device=x.device, dtype=x.dtype)
     c = c.to(t.dtype)
     uc = uc.to(t.dtype)
-    print(x.dtype, c.dtype, t.dtype, uc.dtype)
     x_prev, pred_x0 = sampler.p_sample_ddim(
         x, c, t, index=t_index,
         unconditional_guidance_scale=5.0,
