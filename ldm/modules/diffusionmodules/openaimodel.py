@@ -723,7 +723,7 @@ class UNetModel(nn.Module):
         t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False)
 
         # FIX dtype mismatch issue:
-        t_emb = t_emb.to(x.dtype)
+        t_emb = t_emb.to(next(self.time_embed.parameters).dtype)
         emb = self.time_embed(t_emb)
 
         if self.num_classes is not None:
