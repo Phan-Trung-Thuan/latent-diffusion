@@ -78,6 +78,11 @@ class TimestepEmbedSequential(nn.Sequential, TimestepBlock):
     """
 
     def forward(self, x, emb, context=None):
+        target_dtype = next(self.parameters()).dtype 
+
+        # 2. Cast the input tensor 'x' to match the model's dtype
+        x = x.to(target_dtype)
+        
         for layer in self:
             if isinstance(layer, TimestepBlock):
                 x = layer(x, emb)
