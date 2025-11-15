@@ -53,7 +53,7 @@ def generate_slice(sampler, model, prompt, steps, H, W, leading_latents=None, cl
         batch_size=batch_size,
         shape=(C, latent_H, latent_W), 
         conditioning=c,
-        unconditional_guidance_scale=7.5,
+        unconditional_guidance_scale=5.0,
         unconditional_conditioning=uc,
         eta=0.0,
         leading_latents=leading_latents,
@@ -163,7 +163,7 @@ if __name__ == '__main__':
     prompt = 'a beautiful landscape'
     H = 512
     W = 512
-    steps = 100
+    steps = 200
     
     final_img, _ = generate_slice(sampler, model, prompt, steps, W, H)
     # --- Modified function call based on slice count ---
