@@ -44,8 +44,9 @@ from tqdm import tqdm
 # ==================================================
 def splice(left, right):
     B, C, H, W = left.shape
-    cut = W * 0.25
-    return torch.cat([left[:, :, :, -cut:], right[:, :, :, cut:]], dim=3)
+    cut1 = W * 0.25
+    cut2 = W * 0.75
+    return torch.cat([left[:, :, :, cut2:], right[:, :, :, cut1:]], dim=3)
 
 
 # ==================================================
@@ -136,9 +137,13 @@ def decode_slice(model, final_latent):
 # ==================================================
 # MAIN — TẠO NHIỀU SLICE NỐI NHAU
 # ==================================================
+from IPython.display import Image, display
 def extend_sequence(sampler, model, prompt, n_slices=10, steps=100, H=256, W=256):
     # slice đầu tiên
     prev_latents, _, _ = generate_first_slice(sampler, model, prompt, steps, H, W)
+    print(prev_latents.shape)
+    img = Image.fromarray(prev_latents[0], 'RGB')
+    display(img)
     prev_latents = [x.clone() for x in prev_latents]
 
     full_img = decode_slice(model, prev_latents[-1])
