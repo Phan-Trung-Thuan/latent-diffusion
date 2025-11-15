@@ -45,7 +45,7 @@ from tqdm import tqdm
 def splice(left, right):
     B, C, H, W = left.shape
     cut = W // 2
-    return torch.cat([left[:, :, :, :cut], right[:, :, :, cut:]], dim=3)
+    return torch.cat([left[:, :, :, cut:], right[:, :, :, cut:]], dim=3)
 
 
 # ==================================================
@@ -98,7 +98,6 @@ def generate_first_slice(sampler, model, prompt, steps, H=256, W=256):
 # ==================================================
 def generate_next_slice(sampler, model, prompt, prev_latents):
     steps = len(prev_latents) - 1  # same number of steps
-    device = prev_latents[0].device
 
     c = model.get_learned_conditioning([prompt])
     uc = model.get_learned_conditioning([""])
