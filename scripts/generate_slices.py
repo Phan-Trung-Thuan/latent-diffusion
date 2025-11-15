@@ -93,7 +93,7 @@ def generate_slice(sampler, model, prompt, prev_latents=None):
     uc = model.get_learned_conditioning([""])
 
     # khởi tạo latent phải = noise
-    noisy = torch.randn(shape).to(prev_latents[0].dtype)
+    noisy = torch.randn(shape).to('cuda')
 
     # bước 0
     # combined = splice(prev_latents[0], noisy)
