@@ -33,11 +33,6 @@ def load_model_from_config(config, ckpt, device_name='cpu', verbose=False):
     return model
 
 
-def decode_slice(model, latent_slice):
-    """Simulates the decoding step: latent -> pixel space."""
-    return model.decode_first_stage(latent_slice.to(next(model.parameters()).dtype))
-
-
 def generate_slice(sampler, model, prompt, steps, H, W, leading_latents=None, clip_ratio=0.375, tail_ratio=0.125, return_latent_t_dict=False):
     """
     Simulates a single full-length sequence generation step, optionally using
@@ -138,6 +133,15 @@ def generate_longer_by_slices(sampler, model, prompt, num_slices=5, steps=100, H
     return final_sequence, musics if return_slices else final_sequence
 
 
+def decode_slice(model, final_latent):
+    decoder_dtype = next(model.first_stage_model.parameters()).dtype
+    final_latent = final_latent.to(device=model.device, dtype=decoder_dtype)
+    decoded = model.decode_first_stage(final_latent)
+    decoded = torch.clamp((decoded + 1) / 2, 0, 1)
+    img = (decoded[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
+    return img
+
+
 if __name__ == '__main__':
     device_name = 'cpu'
     if torch.cuda.is_available():
@@ -177,5 +181,4 @@ if __name__ == '__main__':
     
     # print(f"Final concatenated sequence shape: {final_img.shape}")
     # Example for saving the final sequence
-    print(final_img)
-    Image.fromarray(final_img.detach().cpu().numpy()).save("extended_coherent_by_slices.png")
+    Image.fromarray(final_img).save("extended_coherent_by_slices.png")
