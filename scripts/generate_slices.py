@@ -151,6 +151,7 @@ def extend_sequence(sampler, model, prompt, n_slices=10, steps=100, H=256, W=256
         img = decode_slice(model, new_latents[-1])
 
         full_img = np.concatenate([full_img, img], axis=1)
+        print(full_img.shape)
         prev_latents = new_latents  # update
 
     return full_img
@@ -188,6 +189,8 @@ if __name__ == "__main__":
     base_count = len(os.listdir(sample_path))
             
     img = extend_sequence(sampler, model, prompt, n_slices=10, steps=100, H=H, W=W)
+    print(img.shape)
+    print(img)
     Image.fromarray(img).save("extended.png")
 
     print(f"Your samples are ready and waiting four you here: \n{outpath} \nEnjoy.")
