@@ -145,8 +145,8 @@ if __name__ == '__main__':
         torch.cuda.empty_cache()
     gc.collect()
 
-    config = OmegaConf.create({}) # Mock config loading
-    model = load_model_from_config(config, "models/ldm/text2img-large/model.ckpt", device_name=device_name) 
+    config = OmegaConf.load("configs/latent-diffusion/txt2img-1p4B-eval.yaml")  # TODO: Optionally download from same location as ckpt and chnage this logic
+    model = load_model_from_config(config, "models/ldm/text2img-large/model.ckpt", device_name=device_name)  # TODO: check path
 
     device = torch.device(device_name)
     model = model.to(device)
