@@ -156,23 +156,25 @@ if __name__ == '__main__':
     outpath = 'outputs/txt2img-samples'
     os.makedirs(outpath, exist_ok=True)
 
-    prompt = 'a beautiful long flowing sequence'
+    prompt = 'a beautiful landscape'
     H = 512
     W = 512
-    
-    # --- Modified function call based on slice count ---
-    num_slices_to_generate = 5
     steps = 100
     
-    final_img, slices = generate_longer_by_slices(
-        sampler, model, prompt, 
-        num_slices=num_slices_to_generate, 
-        steps=steps, 
-        H=H, 
-        W=W,
-        return_slices=True
-    )
+    final_img, _ = generate_slice(sampler, model, prompt, steps, W, H)
+    # --- Modified function call based on slice count ---
+    # num_slices_to_generate = 5
+    # steps = 100
     
-    print(f"Final concatenated sequence shape: {final_img.shape}")
+    # final_img, slices = generate_longer_by_slices(
+    #     sampler, model, prompt, 
+    #     num_slices=num_slices_to_generate, 
+    #     steps=steps, 
+    #     H=H, 
+    #     W=W,
+    #     return_slices=True
+    # )
+    
+    # print(f"Final concatenated sequence shape: {final_img.shape}")
     # Example for saving the final sequence
-    # Image.fromarray(final_img).save("extended_coherent_by_slices.png")
+    Image.fromarray(final_img).save("extended_coherent_by_slices.png")
