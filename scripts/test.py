@@ -35,7 +35,7 @@ def load_model_from_config(config, ckpt, device_name='cpu', verbose=False):
 
 def decode_slice(model, latent_slice):
     """Simulates the decoding step: latent -> pixel space."""
-    return model.decode_first_stage(latent_slice.to(next(model.decode_first_stage.parameters()).dtype))
+    return model.decode_first_stage(latent_slice.to(next(model.parameters()).dtype))
 
 
 def generate_slice(sampler, model, prompt, steps, H, W, leading_latents=None, clip_ratio=0.375, tail_ratio=0.125, return_latent_t_dict=False):
