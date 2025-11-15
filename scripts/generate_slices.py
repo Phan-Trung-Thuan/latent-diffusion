@@ -184,7 +184,7 @@ if __name__ == "__main__":
     H = 512
     W = 512
             
-    img = extend_sequence(sampler, model, prompt, n_slices=10, steps=100, H=H, W=W)
+    img = extend_sequence(sampler, model, prompt, n_slices=5, steps=100, H=H, W=W)
     print(img.shape)
     # print(img)
     Image.fromarray(img).save("extended.png")
