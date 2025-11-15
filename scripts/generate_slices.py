@@ -97,7 +97,7 @@ def generate_first_slice(sampler, model, prompt, steps, H=256, W=256):
 # TẠO SLICE THỨ 2 BẰNG CƠ CHẾ: COPY LEFT + DENOISE RIGHT STEP-BY-STEP
 # ==================================================
 def generate_next_slice(sampler, model, prompt, prev_latents):
-    steps = len(prev_latents) - 1  # same number of steps
+    steps = len(prev_latents)  # same number of steps
 
     c = model.get_learned_conditioning([prompt])
     uc = model.get_learned_conditioning([""])
