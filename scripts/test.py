@@ -106,9 +106,9 @@ def generate_longer_by_slices(sampler, model, prompt, num_slices=5, steps=100, H
     # The initial run does not use leading_latents, but it must return them for the next step.
     music, leading_latents = generate_slice(
         sampler, model, prompt, steps, H, W, 
-        leading_latents=None, 
-        clip_ratio=DEFAULT_CLIP_RATIO,
-        tail_ratio=DEFAULT_TAIL_RATIO,
+        # leading_latents=None, 
+        # clip_ratio=DEFAULT_CLIP_RATIO,
+        # tail_ratio=DEFAULT_TAIL_RATIO,
         return_latent_t_dict=True
     )
     musics.append(music)
@@ -165,7 +165,7 @@ if __name__ == '__main__':
     W = 512
     steps = 200
     
-    # final_img, _ = generate_slice(sampler, model, prompt, steps, W, H)
+    # final_img, _ = generate_slice(sampler, model, prompt, steps, H, W)
     # --- Modified function call based on slice count ---
     num_slices_to_generate = 5
     
