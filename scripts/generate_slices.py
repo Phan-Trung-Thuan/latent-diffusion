@@ -113,7 +113,7 @@ def generate_next_slice(sampler, model, prompt, prev_latents):
     print(len(prev_latents))
 
     # các bước tiếp theo
-    for t in range(1, steps):
+    for t in range(0, steps):
         combined = splice(prev_latents[t], new_latents[-1])
         x = ddim_step(sampler, combined, c, uc, t_index=t)
         new_latents.append(x)
