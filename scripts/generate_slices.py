@@ -82,14 +82,18 @@ def generate_first_slice(sampler, model, prompt, steps, H=256, W=256):
                 latents = intermediates["x_inter"]  # list length = steps+1
                 return latents, c, uc
 
-def generate_next_slice(sampler, model, prompt, prev_latents):
-    steps = len(prev_latents) - 1  # same number of steps
+def generate_slice(sampler, model, prompt, prev_latents=None):
+    # steps = len(prev_latents) - 1  # same number of steps
+    steps = 100
+    H = 512
+    W = 512
+    shape = [4, H // 8, W // 8]
 
     c = model.get_learned_conditioning([prompt])
     uc = model.get_learned_conditioning([""])
 
     # khởi tạo latent phải = noise
-    noisy = torch.randn_like(prev_latents[0]).to(prev_latents[0].dtype)
+    noisy = torch.randn(shape).to(prev_latents[0].dtype)
 
     # bước 0
     # combined = splice(prev_latents[0], noisy)
@@ -104,7 +108,7 @@ def generate_next_slice(sampler, model, prompt, prev_latents):
         x = ddim_step(sampler, new_latents[-1], c, uc, t_index=t)
         new_latents.append(x)
 
-    return new_latents
+    return decode_slice(model, new_latents[-1])
 
 def decode_slice(model, final_latent):
     decoder_dtype = next(model.first_stage_model.parameters()).dtype
@@ -115,24 +119,24 @@ def decode_slice(model, final_latent):
     return img
 
 
-def extend_sequence(sampler, model, prompt, n_slices=10, steps=100, H=256, W=256):
-    # slice đầu tiên
-    prev_latents, _, _ = generate_first_slice(sampler, model, prompt, steps, H, W)
-    prev_latents = [x.clone() for x in prev_latents]
+# def extend_sequence(sampler, model, prompt, n_slices=10, steps=100, H=256, W=256):
+#     # slice đầu tiên
+#     prev_latents, _, _ = generate_first_slice(sampler, model, prompt, steps, H, W)
+#     prev_latents = [x.clone() for x in prev_latents]
 
-    full_img = decode_slice(model, prev_latents[-1])
+#     full_img = decode_slice(model, prev_latents[-1])
 
-    for i in range(1, n_slices):
-        print(f"Generating slice {i+1}/{n_slices}")
+#     for i in range(1, n_slices):
+#         print(f"Generating slice {i+1}/{n_slices}")
 
-        new_latents = generate_next_slice(sampler, model, prompt, prev_latents)
-        img = decode_slice(model, new_latents[-1])
+#         new_latents = generate_next_slice(sampler, model, prompt, prev_latents)
+#         img = decode_slice(model, new_latents[-1])
 
-        full_img = np.concatenate([full_img, img], axis=1)
-        # print(full_img.shape)
-        prev_latents = new_latents  # update
+#         full_img = np.concatenate([full_img, img], axis=1)
+#         # print(full_img.shape)
+#         prev_latents = new_latents  # update
 
-    return full_img
+#     return full_img
 
 
 if __name__ == "__main__":
@@ -162,7 +166,8 @@ if __name__ == "__main__":
     H = 512
     W = 512
             
-    img = extend_sequence(sampler, model, prompt, n_slices=5, steps=100, H=H, W=W)
+    # img = extend_sequence(sampler, model, prompt, n_slices=5, steps=100, H=H, W=W)
+    img = generate_slice(sampler, model, prompt)
     print(img.shape)
     # print(img)
     Image.fromarray(img).save("extended.png")
