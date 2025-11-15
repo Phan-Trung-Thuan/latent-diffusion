@@ -53,7 +53,6 @@ def splice(left, right):
 # ==================================================
 @torch.no_grad()
 def ddim_step(sampler, x, c, uc, t_index):
-    print(t_index)
     t = torch.tensor([sampler.ddim_timesteps[t_index]], device=x.device, dtype=torch.long)
     c = c.to(x.dtype)
     uc = uc.to(x.dtype)
@@ -98,7 +97,7 @@ def generate_first_slice(sampler, model, prompt, steps, H=256, W=256):
 # TẠO SLICE THỨ 2 BẰNG CƠ CHẾ: COPY LEFT + DENOISE RIGHT STEP-BY-STEP
 # ==================================================
 def generate_next_slice(sampler, model, prompt, prev_latents):
-    steps = len(prev_latents)  # same number of steps
+    steps = len(prev_latents) - 1  # same number of steps
 
     c = model.get_learned_conditioning([prompt])
     uc = model.get_learned_conditioning([""])
@@ -138,7 +137,6 @@ def decode_slice(model, final_latent):
 # MAIN — TẠO NHIỀU SLICE NỐI NHAU
 # ==================================================
 def extend_sequence(sampler, model, prompt, n_slices=10, steps=100, H=256, W=256):
-
     # slice đầu tiên
     prev_latents, _, _ = generate_first_slice(sampler, model, prompt, steps, H, W)
     prev_latents = [x.clone() for x in prev_latents]
