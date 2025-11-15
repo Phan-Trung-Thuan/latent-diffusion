@@ -183,14 +183,8 @@ if __name__ == "__main__":
     prompt = 'a beautiful landscape, 4k photo'
     H = 512
     W = 512
-
-    sample_path = os.path.join(outpath, "samples")
-    os.makedirs(sample_path, exist_ok=True)
-    base_count = len(os.listdir(sample_path))
             
     img = extend_sequence(sampler, model, prompt, n_slices=10, steps=100, H=H, W=W)
     print(img.shape)
     print(img)
     Image.fromarray(img).save("extended.png")
-
-    print(f"Your samples are ready and waiting four you here: \n{outpath} \nEnjoy.")
