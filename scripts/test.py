@@ -177,4 +177,5 @@ if __name__ == '__main__':
     
     # print(f"Final concatenated sequence shape: {final_img.shape}")
     # Example for saving the final sequence
-    Image.fromarray(final_img).save("extended_coherent_by_slices.png")
+    print(final_img)
+    Image.fromarray(final_img.detach().cpu().numpy()).save("extended_coherent_by_slices.png")
