@@ -287,8 +287,8 @@ class DDIMSampler(object):
                 
                 # Check if the current timestep is a key in the provided latents dictionary
                 if t_item in leading_latents:
-                    copy_start = int(img.shape[2] * clip_ratio)
-                    tail_length = int(img.shape[2] * tail_ratio)
+                    copy_start = int(img.shape[3] * clip_ratio)
+                    tail_length = int(img.shape[3] * tail_ratio)
                     ref_latents = leading_latents[t_item]
                     
                     # Implementation of the trick:
@@ -305,7 +305,7 @@ class DDIMSampler(object):
                     
                     # Using the provided complex slicing logic from the example function:
                     try:
-                        img[:, :, :copy_start] = ref_latents[:, :, - copy_start - tail_length: - tail_length].to(img.device)
+                        img[:, :, :, :copy_start] = ref_latents[:, :, :, - copy_start - tail_length: - tail_length].to(img.device)
                     except Exception as e:
                         print(f"Warning: Latent manipulation failed at timestep {t_item}. Error: {e}")
             # --- End of New Latent Manipulation Logic ---
