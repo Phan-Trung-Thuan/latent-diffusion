@@ -111,8 +111,6 @@ def generate_longer_by_slices(sampler, model, prompt, num_slices=5, steps=100, H
         sampler, model, prompt, steps, H, W,
         return_latent_t_dict=True
     )
-    print(music.shape, music)
-    music, leading_latents = music
     
     clip_point = int(music.shape[1] * (1.0 - overlap_ratio))
     musics.append(music[:, :clip_point])
@@ -129,7 +127,6 @@ def generate_longer_by_slices(sampler, model, prompt, num_slices=5, steps=100, H
             tail_ratio=DEFAULT_TAIL_RATIO,
             return_latent_t_dict=True # Keep returning them for the next iteration
         )
-        music, leading_latents = music
 
         clip_start = int(music.shape[1] * overlap_ratio)
         musics.append(music[:, clip_start:])
