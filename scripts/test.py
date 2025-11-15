@@ -112,8 +112,9 @@ def generate_longer_by_slices(sampler, model, prompt, num_slices=5, steps=100, H
         return_latent_t_dict=True
     )
     
-    clip_point = int(music.shape[1] * (1.0 - overlap_ratio))
-    musics.append(music[:, :clip_point])
+    # clip_point = int(music.shape[1] * (1.0 - overlap_ratio))
+    # musics.append(music[:, :clip_point])
+    musics.append(music)
 
     # --- Subsequent Runs (i = 2 to num_slices) ---
     for i in tqdm(range(2, num_slices + 1), desc='Generating subsequent slices'):
@@ -165,7 +166,7 @@ if __name__ == '__main__':
     outpath = 'outputs/txt2img-samples'
     os.makedirs(outpath, exist_ok=True)
 
-    prompt = 'a beautiful landscape'
+    prompt = 'a beautiful landscape, full hd'
     H = 512
     W = 512
     steps = 200
