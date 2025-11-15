@@ -111,6 +111,7 @@ def generate_longer_by_slices(sampler, model, prompt, num_slices=5, steps=100, H
         sampler, model, prompt, steps, H, W,
         return_latent_t_dict=True
     )
+    print(music.shape, music)
     music, leading_latents = music
     
     clip_point = int(music.shape[1] * (1.0 - overlap_ratio))
