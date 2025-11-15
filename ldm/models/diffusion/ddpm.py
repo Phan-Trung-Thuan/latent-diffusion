@@ -1407,8 +1407,11 @@ class DiffusionWrapper(pl.LightningModule):
             out = self.diffusion_model(xc, t)
         elif self.conditioning_key == 'crossattn':
             cc = torch.cat(c_crossattn, 1)
-            print(x.dtype, t.dtype, cc.dtype)
-            out = self.diffusion_model(x, t, context=cc)
+            try:
+                out = self.diffusion_model(x, t, context=cc)
+            except:
+                print(x.device, t.device, cc.device)
+                print(x, t, cc)
         elif self.conditioning_key == 'hybrid':
             xc = torch.cat([x] + c_concat, dim=1)
             cc = torch.cat(c_crossattn, 1)
