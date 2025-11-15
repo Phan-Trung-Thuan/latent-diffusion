@@ -737,7 +737,6 @@ class UNetModel(nn.Module):
 
         h = x.type(self.dtype)
         for module in self.input_blocks:
-            print(h.dtype, emb.dtype, context.dtype)
             h = module(h, emb, context)
             hs.append(h)
         h = self.middle_block(h, emb, context)
