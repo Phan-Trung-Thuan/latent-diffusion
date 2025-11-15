@@ -107,16 +107,16 @@ def generate_next_slice(sampler, model, prompt, prev_latents):
     noisy = torch.randn_like(prev_latents[0]).to(prev_latents[0].dtype)
 
     # bước 0
-    combined = splice(prev_latents[0], noisy)
-    x = ddim_step(sampler, combined, c, uc, t_index=0)
+    # combined = splice(prev_latents[0], noisy)
+    x = ddim_step(sampler, noisy, c, uc, t_index=0)
 
     new_latents = [x]
     print(len(prev_latents))
 
     # các bước tiếp theo
     for t in range(1, steps):
-        combined = splice(prev_latents[t], new_latents[-1])
-        x = ddim_step(sampler, combined, c, uc, t_index=t)
+        # combined = splice(prev_latents[t], new_latents[-1])
+        x = ddim_step(sampler, new_latents[-1], c, uc, t_index=t)
         new_latents.append(x)
 
     return new_latents
@@ -137,15 +137,10 @@ def decode_slice(model, final_latent):
 # ==================================================
 # MAIN — TẠO NHIỀU SLICE NỐI NHAU
 # ==================================================
-from IPython.display import Image, display
 def extend_sequence(sampler, model, prompt, n_slices=10, steps=100, H=256, W=256):
     # slice đầu tiên
     prev_latents, _, _ = generate_first_slice(sampler, model, prompt, steps, H, W)
-    print(prev_latents[0].shape)
-    # print(prev_latents.shape)
-    # img = Image.fromarray(prev_latents[0], 'RGB')
-    # display(img)
-    # prev_latents = [x.clone() for x in prev_latents]
+    prev_latents = [x.clone() for x in prev_latents]
 
     full_img = decode_slice(model, prev_latents[-1])
 
