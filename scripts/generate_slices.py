@@ -95,6 +95,7 @@ def generate_slice(sampler, model, prompt, prev_latents=None):
     # khởi tạo latent phải = noise
     noisy = torch.randn(shape).to('cuda')
 
+    sampler.make_schedule(ddim_num_steps=steps, ddim_eta=0.0, verbose=False)
     # bước 0
     # combined = splice(prev_latents[0], noisy)
     x = ddim_step(sampler, noisy, c, uc, t_index=0)
