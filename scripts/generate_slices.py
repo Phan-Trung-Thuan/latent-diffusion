@@ -42,21 +42,10 @@ from tqdm import tqdm
 # ==================================================
 # GHÉP LATENT: lấy nửa trái từ slice1, nửa phải từ slice2
 # ==================================================
-# def splice(left, right):
-#     B, C, H, W = left.shape
-#     cut = W // 2
-#     return torch.cat([left[:, :, :, cut:], right[:, :, :, cut:]], dim=3)
-
-def splice(leader_t, follower_t):
-    # leader_t = latent slice cũ (old)
-    # follower_t = latent slice mới (new)
-    B, C, H, W = leader_t.shape
+def splice(left, right):
+    B, C, H, W = left.shape
     cut = W // 2
-
-    left  = follower_t[:, :, :, :cut]   # new
-    right = leader_t[:, :, :, cut:]     # old
-
-    return torch.cat([left, right], dim=3)
+    return torch.cat([left[:, :, :, cut:], right[:, :, :, cut:]], dim=3)
 
 
 # ==================================================
@@ -107,59 +96,27 @@ def generate_first_slice(sampler, model, prompt, steps, H=256, W=256):
 # ==================================================
 # TẠO SLICE THỨ 2 BẰNG CƠ CHẾ: COPY LEFT + DENOISE RIGHT STEP-BY-STEP
 # ==================================================
-# def generate_next_slice(sampler, model, prompt, prev_latents):
-#     steps = len(prev_latents) - 1  # same number of steps
-
-#     c = model.get_learned_conditioning([prompt])
-#     uc = model.get_learned_conditioning([""])
-
-#     # khởi tạo latent phải = noise
-#     noisy = torch.randn_like(prev_latents[0]).to(prev_latents[0].dtype)
-
-#     # bước 0
-#     combined = splice(prev_latents[0], noisy)
-#     x = ddim_step(sampler, combined, c, uc, t_index=0)
-
-#     new_latents = [x]
-
-#     # các bước tiếp theo
-#     for t in range(1, steps):
-#         combined = splice(prev_latents[t], new_latents[-1])
-#         x = ddim_step(sampler, combined, c, uc, t_index=t)
-#         new_latents.append(x)
-
-#     return new_latents
-
 def generate_next_slice(sampler, model, prompt, prev_latents):
-    device = prev_latents[0].device
-    steps = len(prev_latents) - 1  # number of DDIM steps
-    
-    c  = model.get_learned_conditioning([prompt])
+    steps = len(prev_latents) - 1  # same number of steps
+
+    c = model.get_learned_conditioning([prompt])
     uc = model.get_learned_conditioning([""])
 
-    # tạo latent mới tại timestep T
-    current_latent = torch.randn_like(prev_latents[0]).to(device)
+    # khởi tạo latent phải = noise
+    noisy = torch.randn_like(prev_latents[0]).to(prev_latents[0].dtype)
 
-    new_latents = [None] * (steps + 1)
-    new_latents[steps] = current_latent  # x_T for new slice
+    # bước 0
+    combined = splice(prev_latents[0], noisy)
+    x = ddim_step(sampler, combined, c, uc, t_index=0)
 
-    # chạy từ timestep T → 0
-    for t in reversed(range(steps)):
-        prev_t = prev_latents[t]          # leader latent at timestep t
-        new_t  = new_latents[t+1]         # follower latent at timestep t
-        
-        combined = splice(prev_t, new_t)
+    new_latents = [x]
+    print(len(prev_latents))
 
-        # chạy đúng timestep
-        ts = torch.full((1,), sampler.ddim_timesteps[t], device=device, dtype=torch.long)
-
-        x_prev, _ = sampler.p_sample_ddim(
-            combined, c, ts, index=t,
-            unconditional_conditioning=uc,
-            unconditional_guidance_scale=1.0
-        )
-
-        new_latents[t] = x_prev
+    # các bước tiếp theo
+    for t in range(1, steps):
+        combined = splice(prev_latents[t], new_latents[-1])
+        x = ddim_step(sampler, combined, c, uc, t_index=t)
+        new_latents.append(x)
 
     return new_latents
 
