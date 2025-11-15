@@ -44,8 +44,8 @@ from tqdm import tqdm
 # ==================================================
 def splice(left, right):
     B, C, H, W = left.shape
-    cut = W // 2
-    return torch.cat([left[:, :, :, cut:], right[:, :, :, cut:]], dim=3)
+    cut = W * 0.25
+    return torch.cat([left[:, :, :, -cut:], right[:, :, :, cut:]], dim=3)
 
 
 # ==================================================
