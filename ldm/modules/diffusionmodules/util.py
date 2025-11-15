@@ -216,7 +216,7 @@ class GroupNorm32(nn.GroupNorm):
         try:
             super().forward(x.float())
         except:
-            print(x.shape, x.float())
+            print(x.shape, x.dtype, x.float())
         return super().forward(x.float()).type(x.dtype)
 
 def conv_nd(dims, *args, **kwargs):
