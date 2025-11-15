@@ -211,16 +211,9 @@ class SiLU(nn.Module):
         return x * torch.sigmoid(x)
 
 
-import torch.nn.functional as F
 class GroupNorm32(nn.GroupNorm):
     def forward(self, x):
-        device = x.device
-        x_float = x.float()
-        w = self.weight.float().to(device) if self.weight is not None else None
-        b = self.bias.float().to(device) if self.bias is not None else None
-        out = F.group_norm(x_float, self.num_groups, weight=w, bias=b, eps=self.eps)
-        return out.to(dtype=x.dtype)
-        # return super().forward(x.float()).type(x.dtype)
+        return super().forward(x.float()).type(x.dtype)
 
 def conv_nd(dims, *args, **kwargs):
     """

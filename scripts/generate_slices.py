@@ -104,7 +104,7 @@ def generate_next_slice(sampler, model, prompt, prev_latents):
     uc = model.get_learned_conditioning([""])
 
     # khởi tạo latent phải = noise
-    noisy = torch.randn_like(prev_latents[0])
+    noisy = torch.randn_like(prev_latents[0]).to(prev_latents[0].dtype)
 
     # bước 0
     combined = splice(prev_latents[0], noisy)
