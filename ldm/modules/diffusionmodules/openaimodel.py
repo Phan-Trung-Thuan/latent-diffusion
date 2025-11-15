@@ -747,6 +747,7 @@ class UNetModel(nn.Module):
         if self.predict_codebook_ids:
             return self.id_predictor(h)
         else:
+            h = h.to(self.out[-1].weight.dtype)
             return self.out(h)
 
 
