@@ -93,8 +93,9 @@ def generate_longer_by_slices(sampler, model, prompt, num_slices=5, steps=100, H
     
     # Default parameters for latent space coherence
     # These match the values in the sample logic you provided (0.375 and 0.125)
-    DEFAULT_CLIP_RATIO = 0.375
-    DEFAULT_TAIL_RATIO = 0.125
+    DEFAULT_CLIP_RATIO = 0.375 # 3/8
+    DEFAULT_TAIL_RATIO = 0.125 # 1/8
+    overlap_ratio = 0.5 # 4/8
     
     musics = []
     leading_latents = None
@@ -107,15 +108,14 @@ def generate_longer_by_slices(sampler, model, prompt, num_slices=5, steps=100, H
     
     # The initial run does not use leading_latents, but it must return them for the next step.
     music, _ = generate_slice(
-        sampler, model, prompt, steps, H, W, 
-        # leading_latents=None, 
-        # clip_ratio=DEFAULT_CLIP_RATIO,
-        # tail_ratio=DEFAULT_TAIL_RATIO,
+        sampler, model, prompt, steps, H, W,
         return_latent_t_dict=True
     )
     music, leading_latents = music
-    musics.append(music)
     
+    clip_point = int(music.shape[1] * (1.0 - overlap_ratio))
+    musics.append(music[:, :clip_point])
+
     # --- Subsequent Runs (i = 2 to num_slices) ---
     for i in tqdm(range(2, num_slices + 1), desc='Generating subsequent slices'):
         print(f"Generating slice {i}/{num_slices}")
@@ -129,7 +129,9 @@ def generate_longer_by_slices(sampler, model, prompt, num_slices=5, steps=100, H
             return_latent_t_dict=True # Keep returning them for the next iteration
         )
         music, leading_latents = music
-        musics.append(music)
+
+        clip_start = int(music.shape[1] * overlap_ratio)
+        musics.append(music[:, clip_start:])
 
     # Concatenate all generated slices (assuming concatenation along the width/sequence dimension, axis=1)
     final_sequence = np.concatenate(musics, axis=1)
