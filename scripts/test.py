@@ -62,7 +62,7 @@ def generate_slice(sampler, model, prompt, steps, H, W, leading_latents=None, cl
         return_latent_t_dict=return_latent_t_dict,
     )
     
-    decoded_output = decode_slice(model, samples[-1])
+    decoded_output = decode_slice(model, samples)
     
     # The dictionary of intermediate latents is nested in intermediates
     # Note: DDIMSampler.sample returns (samples, intermediates), where intermediates 
