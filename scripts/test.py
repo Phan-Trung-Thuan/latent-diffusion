@@ -106,13 +106,14 @@ def generate_longer_by_slices(sampler, model, prompt, num_slices=5, steps=100, H
     print(f"Generating slice 1/{num_slices} (Initial run)")
     
     # The initial run does not use leading_latents, but it must return them for the next step.
-    music, leading_latents = generate_slice(
+    music, _ = generate_slice(
         sampler, model, prompt, steps, H, W, 
         # leading_latents=None, 
         # clip_ratio=DEFAULT_CLIP_RATIO,
         # tail_ratio=DEFAULT_TAIL_RATIO,
         return_latent_t_dict=True
     )
+    music, leading_latents = music
     musics.append(music)
     
     # --- Subsequent Runs (i = 2 to num_slices) ---
@@ -120,13 +121,14 @@ def generate_longer_by_slices(sampler, model, prompt, num_slices=5, steps=100, H
         print(f"Generating slice {i}/{num_slices}")
         
         # Subsequent runs use the `leading_latents` from the previous step for coherence.
-        music, leading_latents = generate_slice(
+        music, _ = generate_slice(
             sampler, model, prompt, steps, H, W, 
             leading_latents=leading_latents, 
             clip_ratio=DEFAULT_CLIP_RATIO, 
             tail_ratio=DEFAULT_TAIL_RATIO,
             return_latent_t_dict=True # Keep returning them for the next iteration
         )
+        music, leading_latents = music
         musics.append(music)
 
     # Concatenate all generated slices (assuming concatenation along the width/sequence dimension, axis=1)
