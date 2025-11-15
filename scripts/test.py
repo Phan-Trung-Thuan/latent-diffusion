@@ -107,7 +107,7 @@ def generate_longer_by_slices(sampler, model, prompt, num_slices=5, steps=100, H
     print(f"Generating slice 1/{num_slices} (Initial run)")
     
     # The initial run does not use leading_latents, but it must return them for the next step.
-    music, _ = generate_slice(
+    music, leading_latents = generate_slice(
         sampler, model, prompt, steps, H, W,
         return_latent_t_dict=True
     )
@@ -120,7 +120,7 @@ def generate_longer_by_slices(sampler, model, prompt, num_slices=5, steps=100, H
         print(f"Generating slice {i}/{num_slices}")
         
         # Subsequent runs use the `leading_latents` from the previous step for coherence.
-        music, _ = generate_slice(
+        music, leading_latents = generate_slice(
             sampler, model, prompt, steps, H, W, 
             leading_latents=leading_latents, 
             clip_ratio=DEFAULT_CLIP_RATIO, 
@@ -128,8 +128,9 @@ def generate_longer_by_slices(sampler, model, prompt, num_slices=5, steps=100, H
             return_latent_t_dict=True # Keep returning them for the next iteration
         )
 
-        clip_start = int(music.shape[1] * overlap_ratio)
-        musics.append(music[:, clip_start:])
+        # clip_start = int(music.shape[1] * overlap_ratio)
+        # musics.append(music[:, clip_start:])
+        musics.append(music)
 
     # Concatenate all generated slices (assuming concatenation along the width/sequence dimension, axis=1)
     final_sequence = np.concatenate(musics, axis=1)
