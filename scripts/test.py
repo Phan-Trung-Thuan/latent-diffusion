@@ -5,43 +5,32 @@ import gc
 from omegaconf import OmegaConf
 from tqdm import tqdm
 from PIL import Image
+
+import sys
+sys.path.append('.')
+
 from ldm.models.diffusion.ddim import DDIMSampler
+from ldm.util import instantiate_from_config
 
 # --- Helper Functions (PLACEHOLDERS, modified for the new logic) ---
 
-def load_model_from_config(config, ckpt, device_name):
-    # Mock model for demonstration purposes
-    from ldm.models.diffusion.ddpm import LatentDiffusion
-    from ldm.modules.diffusionmodules.util import make_beta_schedule
-    
-    class MockModel(LatentDiffusion):
-        def __init__(self):
-            # DDIM Sampler requires: num_timesteps, alphas_cumprod, alphas_cumprod_prev, betas
-            self.num_timesteps = 1000
-            self.betas = make_beta_schedule("linear", self.num_timesteps, 1e-4, 2e-2).to(device_name)
-            self.alphas = 1.0 - self.betas
-            self.alphas_cumprod = torch.cumprod(self.alphas, dim=0)
-            self.alphas_cumprod_prev = torch.cat(
-                [torch.tensor([1.0], device=device_name), self.alphas_cumprod[:-1]]
-            )
-            self.device = torch.device(device_name)
-            
-        def apply_model(self, x_noisy, t, cond):
-            return torch.zeros_like(x_noisy)
-            
-        def q_sample(self, x_start, t):
-            return torch.randn_like(x_start)
-            
-        def decode_first_stage(self, z):
-            z_np = z.cpu().numpy()
-            B, C, H, W = z_np.shape
-            
-            # Simple simulation of sequence output shape: [H, W*8, 3] for a single batch
-            decoded_H = H * 8
-            decoded_W = W * 8
-            return (np.random.rand(decoded_H, decoded_W, 3) * 255).astype(np.uint8)
+def load_model_from_config(config, ckpt, device_name='cpu', verbose=False):
+    print(f"Loading model from {ckpt}")
+    pl_sd = torch.load(ckpt, map_location='cuda:0' if device_name == 'cuda' else 'cpu')
+    sd = pl_sd["state_dict"]
+    model = instantiate_from_config(config.model)
+    m, u = model.load_state_dict(sd, strict=False)
+    if len(m) > 0 and verbose:
+        print("missing keys:")
+        print(m)
+    if len(u) > 0 and verbose:
+        print("unexpected keys:")
+        print(u)
 
-    return MockModel() 
+    if device_name == 'cuda':
+        model.half().cuda()
+    model.eval()
+    return model
 
 
 def decode_slice(model, latent_slice):
