@@ -39,19 +39,12 @@ import torch
 import numpy as np
 from tqdm import tqdm
 
-# ==================================================
-# GHÉP LATENT: lấy nửa trái từ slice1, nửa phải từ slice2
-# ==================================================
 def splice(left, right):
     B, C, H, W = left.shape
     cut1 = W * 0.25
     cut2 = W * 0.75
     return torch.cat([left[:, :, :, cut2:], right[:, :, :, cut1:]], dim=3)
 
-
-# ==================================================
-# CHẠY 1 BƯỚC DDIM
-# ==================================================
 @torch.no_grad()
 def ddim_step(sampler, x, c, uc, t_index):
     t = torch.tensor([sampler.ddim_timesteps[t_index]], device=x.device, dtype=torch.long)
@@ -64,10 +57,6 @@ def ddim_step(sampler, x, c, uc, t_index):
     )
     return x_prev
 
-
-# ==================================================
-# TẠO SLICE ĐẦU (LẤY FULL LATENT TRAJECTORY)
-# ==================================================
 def generate_first_slice(sampler, model, prompt, steps, H=256, W=256):
     with torch.no_grad():
         with torch.autocast("cuda"):
@@ -93,10 +82,6 @@ def generate_first_slice(sampler, model, prompt, steps, H=256, W=256):
                 latents = intermediates["x_inter"]  # list length = steps+1
                 return latents, c, uc
 
-
-# ==================================================
-# TẠO SLICE THỨ 2 BẰNG CƠ CHẾ: COPY LEFT + DENOISE RIGHT STEP-BY-STEP
-# ==================================================
 def generate_next_slice(sampler, model, prompt, prev_latents):
     steps = len(prev_latents) - 1  # same number of steps
 
@@ -121,10 +106,6 @@ def generate_next_slice(sampler, model, prompt, prev_latents):
 
     return new_latents
 
-
-# ==================================================
-# DECODE SLICE CUỐI CÙNG SAU 100 STEP
-# ==================================================
 def decode_slice(model, final_latent):
     decoder_dtype = next(model.first_stage_model.parameters()).dtype
     final_latent = final_latent.to(device=model.device, dtype=decoder_dtype)
@@ -134,9 +115,6 @@ def decode_slice(model, final_latent):
     return img
 
 
-# ==================================================
-# MAIN — TẠO NHIỀU SLICE NỐI NHAU
-# ==================================================
 def extend_sequence(sampler, model, prompt, n_slices=10, steps=100, H=256, W=256):
     # slice đầu tiên
     prev_latents, _, _ = generate_first_slice(sampler, model, prompt, steps, H, W)

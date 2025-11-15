@@ -1,0 +1,211 @@
+import torch
+import numpy as np
+import os
+import gc
+from omegaconf import OmegaConf
+from tqdm import tqdm
+from PIL import Image
+
+# --- Helper Functions (PLACEHOLDERS, modified for the new logic) ---
+
+# Assume these functions are available/defined elsewhere in the user's codebase
+# from ldm.util import instantiate_from_config
+# from samplers import DDIMSampler, PLMSSampler
+
+def load_model_from_config(config, ckpt, device_name):
+    # Mock model for demonstration purposes
+    from ldm.models.diffusion.ddpm import LatentDiffusion
+    from ldm.modules.diffusionmodules.util import make_beta_schedule
+    
+    class MockModel(LatentDiffusion):
+        def __init__(self):
+            # DDIM Sampler requires: num_timesteps, alphas_cumprod, alphas_cumprod_prev, betas
+            self.num_timesteps = 1000
+            self.betas = make_beta_schedule("linear", self.num_timesteps, 1e-4, 2e-2).to(device_name)
+            self.alphas = 1.0 - self.betas
+            self.alphas_cumprod = torch.cumprod(self.alphas, dim=0)
+            self.alphas_cumprod_prev = torch.cat(
+                [torch.tensor([1.0], device=device_name), self.alphas_cumprod[:-1]]
+            )
+            self.device = torch.device(device_name)
+            
+        def apply_model(self, x_noisy, t, cond):
+            return torch.zeros_like(x_noisy)
+            
+        def q_sample(self, x_start, t):
+            return torch.randn_like(x_start)
+            
+        def decode_first_stage(self, z):
+            z_np = z.cpu().numpy()
+            B, C, H, W = z_np.shape
+            
+            # Simple simulation of sequence output shape: [H, W*8, 3] for a single batch
+            decoded_H = H * 8
+            decoded_W = W * 8
+            return (np.random.rand(decoded_H, decoded_W, 3) * 255).astype(np.uint8)
+
+    return MockModel() 
+
+
+def decode_slice(model, latent_slice):
+    """Simulates the decoding step: latent -> pixel space."""
+    return model.decode_first_stage(latent_slice)
+
+
+def generate_slice(sampler, model, prompt, steps, H, W, leading_latents=None, clip_ratio=0.375, tail_ratio=0.125, return_latent_t_dict=False):
+    """
+    Simulates a single full-length sequence generation step, optionally using
+    leading latents for coherence and returning new leading latents.
+    """
+    C = 4 # Latent Channels
+    batch_size = 1
+    
+    # Mocking conditioning (text embedding)
+    cond = torch.randn(batch_size, 77, 768, device=model.device) 
+    
+    # LDM latent space size is typically 8x smaller than H, W
+    latent_H = H // 8
+    latent_W = W // 8
+    
+    samples, intermediates = sampler.sample(
+        S=steps,
+        batch_size=batch_size,
+        shape=(C, latent_H, latent_W), 
+        conditioning=cond,
+        unconditional_guidance_scale=7.5,
+        unconditional_conditioning=torch.zeros_like(cond),
+        eta=0.0,
+        leading_latents=leading_latents,
+        clip_ratio=clip_ratio,
+        tail_ratio=tail_ratio,
+        return_latent_t_dict=return_latent_t_dict,
+    )
+    
+    decoded_output = decode_slice(model, samples)
+    
+    # The dictionary of intermediate latents is nested in intermediates
+    # Note: DDIMSampler.sample returns (samples, intermediates), where intermediates 
+    # is either the standard dict or (latent_dict, standard_dict) if return_latent_t_dict is True
+    
+    if return_latent_t_dict:
+        # Assuming the modified DDIMSampler returns (final_result, intermediates) where 
+        # final_result is (img, latent_t_to_out) if return_latent_t_dict is True
+        return decoded_output, samples[1] # samples[1] is the latent_t_to_out dict
+    
+    return decoded_output, None
+
+
+# --- Refactored Sequence Extension Logic (generate_longer_by_slices) ---
+
+def generate_longer_by_slices(sampler, model, prompt, num_slices=5, steps=100, H=256, W=256, return_slices: bool = False):
+    """
+    Generates a longer sequence by concatenating 'num_slices' segments, 
+    maintaining coherence by passing intermediate latents.
+    
+    This version follows the logic:
+    - Each slice is a full-length generation.
+    - Slices are concatenated along the sequence dimension (assumed axis=1/Width).
+    - Uses default fixed clip and tail ratios.
+    """
+    
+    # Default parameters for latent space coherence
+    # These match the values in the sample logic you provided (0.375 and 0.125)
+    DEFAULT_CLIP_RATIO = 0.375
+    DEFAULT_TAIL_RATIO = 0.125
+    
+    musics = []
+    leading_latents = None
+
+    if num_slices < 1:
+        return np.array([]), []
+
+    # --- Run 1: Generate the first slice (unconditional) ---
+    print(f"Generating slice 1/{num_slices} (Initial run)")
+    
+    # The initial run does not use leading_latents, but it must return them for the next step.
+    music, leading_latents = generate_slice(
+        sampler, model, prompt, steps, H, W, 
+        leading_latents=None, 
+        clip_ratio=DEFAULT_CLIP_RATIO,
+        tail_ratio=DEFAULT_TAIL_RATIO,
+        return_latent_t_dict=True
+    )
+    musics.append(music)
+    
+    # --- Subsequent Runs (i = 2 to num_slices) ---
+    for i in tqdm(range(2, num_slices + 1), desc='Generating subsequent slices'):
+        print(f"Generating slice {i}/{num_slices}")
+        
+        # Subsequent runs use the `leading_latents` from the previous step for coherence.
+        music, leading_latents = generate_slice(
+            sampler, model, prompt, steps, H, W, 
+            leading_latents=leading_latents, 
+            clip_ratio=DEFAULT_CLIP_RATIO, 
+            tail_ratio=DEFAULT_TAIL_RATIO,
+            return_latent_t_dict=True # Keep returning them for the next iteration
+        )
+        musics.append(music)
+
+    # Concatenate all generated slices (assuming concatenation along the width/sequence dimension, axis=1)
+    final_sequence = np.concatenate(musics, axis=1)
+
+    return final_sequence, musics if return_slices else final_sequence
+
+# --- Main Execution Context (Simplified) ---
+
+# Mocking the DDIMSampler import from the previous response's modified code
+class DDIMSampler:
+    def __init__(self, model):
+        self.model = model
+    def sample(self, S, batch_size, shape, conditioning, unconditional_guidance_scale, unconditional_conditioning, eta, leading_latents, clip_ratio, tail_ratio, return_latent_t_dict):
+        # Mock sampling output
+        latent = torch.randn(shape, device=self.model.device)
+        
+        # Mock latent dictionary output (for demonstration)
+        latent_dict = {t: torch.randn(shape, device=self.model.device) for t in range(S, 0, -1)}
+        
+        if return_latent_t_dict:
+            # Mocking the expected return structure of the modified DDIMSampler
+            return (latent, latent_dict), None # (final_result, intermediates)
+        else:
+            return latent, None
+
+
+if __name__ == '__main__':
+    device_name = 'cpu'
+    if torch.cuda.is_available():
+        device_name = 'cuda'
+        torch.cuda.empty_cache()
+    gc.collect()
+
+    config = OmegaConf.create({}) # Mock config loading
+    model = load_model_from_config(config, "models/ldm/text2img-large/model.ckpt", device_name=device_name) 
+
+    device = torch.device(device_name)
+    model = model.to(device)
+
+    sampler = DDIMSampler(model)
+
+    outpath = 'outputs/txt2img-samples'
+    os.makedirs(outpath, exist_ok=True)
+
+    prompt = 'a beautiful long flowing sequence'
+    H = 512
+    W = 512
+    
+    # --- Modified function call based on slice count ---
+    num_slices_to_generate = 5
+    steps = 100
+    
+    final_img, slices = generate_longer_by_slices(
+        sampler, model, prompt, 
+        num_slices=num_slices_to_generate, 
+        steps=steps, 
+        H=H, 
+        W=W,
+        return_slices=True
+    )
+    
+    print(f"Final concatenated sequence shape: {final_img.shape}")
+    # Example for saving the final sequence
+    # Image.fromarray(final_img).save("extended_coherent_by_slices.png")
