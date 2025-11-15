@@ -5,12 +5,9 @@ import gc
 from omegaconf import OmegaConf
 from tqdm import tqdm
 from PIL import Image
+from ldm.models.diffusion.ddim import DDIMSampler
 
 # --- Helper Functions (PLACEHOLDERS, modified for the new logic) ---
-
-# Assume these functions are available/defined elsewhere in the user's codebase
-# from ldm.util import instantiate_from_config
-# from samplers import DDIMSampler, PLMSSampler
 
 def load_model_from_config(config, ckpt, device_name):
     # Mock model for demonstration purposes
@@ -60,8 +57,8 @@ def generate_slice(sampler, model, prompt, steps, H, W, leading_latents=None, cl
     C = 4 # Latent Channels
     batch_size = 1
     
-    # Mocking conditioning (text embedding)
-    cond = torch.randn(batch_size, 77, 768, device=model.device) 
+    c = model.get_learned_conditioning([prompt])
+    uc = model.get_learned_conditioning([""])
     
     # LDM latent space size is typically 8x smaller than H, W
     latent_H = H // 8
@@ -71,9 +68,9 @@ def generate_slice(sampler, model, prompt, steps, H, W, leading_latents=None, cl
         S=steps,
         batch_size=batch_size,
         shape=(C, latent_H, latent_W), 
-        conditioning=cond,
+        conditioning=c,
         unconditional_guidance_scale=7.5,
-        unconditional_conditioning=torch.zeros_like(cond),
+        unconditional_conditioning=uc,
         eta=0.0,
         leading_latents=leading_latents,
         clip_ratio=clip_ratio,
@@ -150,25 +147,6 @@ def generate_longer_by_slices(sampler, model, prompt, num_slices=5, steps=100, H
     final_sequence = np.concatenate(musics, axis=1)
 
     return final_sequence, musics if return_slices else final_sequence
-
-# --- Main Execution Context (Simplified) ---
-
-# Mocking the DDIMSampler import from the previous response's modified code
-class DDIMSampler:
-    def __init__(self, model):
-        self.model = model
-    def sample(self, S, batch_size, shape, conditioning, unconditional_guidance_scale, unconditional_conditioning, eta, leading_latents, clip_ratio, tail_ratio, return_latent_t_dict):
-        # Mock sampling output
-        latent = torch.randn(shape, device=self.model.device)
-        
-        # Mock latent dictionary output (for demonstration)
-        latent_dict = {t: torch.randn(shape, device=self.model.device) for t in range(S, 0, -1)}
-        
-        if return_latent_t_dict:
-            # Mocking the expected return structure of the modified DDIMSampler
-            return (latent, latent_dict), None # (final_result, intermediates)
-        else:
-            return latent, None
 
 
 if __name__ == '__main__':
