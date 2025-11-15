@@ -172,6 +172,7 @@ class CrossAttention(nn.Module):
 
         q = self.to_q(x)
         context = default(context, x)
+        print(context.dtype, self.to_k.weight.dtype)
         k = self.to_k(context)
         v = self.to_v(context)
 
