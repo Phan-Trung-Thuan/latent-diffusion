@@ -166,14 +166,14 @@ if __name__ == '__main__':
     outpath = 'outputs/txt2img-samples'
     os.makedirs(outpath, exist_ok=True)
 
-    prompt = 'a beautiful landscape, full hd'
+    prompt = 'a beautiful landscape with grass, tree, river, mountain and sky, full hd'
     H = 512
     W = 512
     steps = 200
     
     # final_img, _ = generate_slice(sampler, model, prompt, steps, H, W)
     # --- Modified function call based on slice count ---
-    num_slices_to_generate = 5
+    num_slices_to_generate = 10
     
     final_img, slices = generate_longer_by_slices(
         sampler, model, prompt, 
