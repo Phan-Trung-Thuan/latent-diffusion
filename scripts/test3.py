@@ -239,7 +239,8 @@ if __name__ == "__main__":
         steps=100, # Giảm bước để test nhanh
         H=512,
         W=512,
-        overlap_ratio=0.35
+        overlap_ratio=0.35,
+        tail_ratio=0.0
     )
 
     final_image = decode_panorama(model, panorama_latent)
