@@ -240,7 +240,7 @@ if __name__ == "__main__":
         sampler, model,
         prompt="a beautiful landscape with grass, trees, river, mountains and sky",
         num_slices=4, # Đặt số slice nhỏ để test
-        steps=50, # Giảm bước để test nhanh
+        steps=200, # Giảm bước để test nhanh
         H=512,
         W=512,
         overlap_ratio=0.375
