@@ -179,8 +179,8 @@ if __name__ == "__main__":
     panorama_latent = generate_latent_panorama(
         sampler, model,
         prompt="a beautiful landscape with grass, trees, river, mountains and sky, ultra wide panorama",
-        num_slices=10,
-        steps=80,
+        num_slices=5,
+        steps=200,
         H=512,
         W=512,
         overlap_ratio=0.30
