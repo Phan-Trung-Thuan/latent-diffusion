@@ -446,7 +446,7 @@ class DDIMSampler(object):
         iterator = tqdm(time_range, desc='DDIM Sampler', total=total_steps)
         for n, step in enumerate(iterator):
             ts = torch.full((batch_size,), step, device=device, dtype=torch.long)
-            index = total_steps - i - 1
+            index = total_steps - n - 1
 
             # Khử nhiễu từng slice
             for i, slice in enumerate(slice_list):
