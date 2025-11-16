@@ -440,12 +440,11 @@ class DDIMSampler(object):
         # sampling
         device = conditioning.device
         panorama_shape = list(tile_shape)
-        stride = int(w * (1 - overlap_ratio))
-        panorama_shape[-1] = w + (num_slices - 1) * stride
-        print(panorama_shape)
+        panorama_shape[-1] = w + (num_slices - 1) * int(w * (1 - overlap_ratio))
         J = torch.randn(panorama_shape).to(device)
+
         # Lập qua mỗi slice theo overlap_ratio, ở mỗi bước lấy slice đó ra từ J, 
-        slice_list = [J[..., i:i+w] for i in range(0, panorama_shape[-1], int(w * (1 - overlap_ratio)))]
+        slice_list = [J[..., i:i+w] for i in range(0, panorama_shape[-1], int(w * (1 - overlap_ratio)))][:num_slices]
 
         iterator = tqdm(time_range, desc='DDIM Sampler', total=total_steps)
         for n, step in enumerate(iterator):
@@ -454,7 +453,6 @@ class DDIMSampler(object):
 
             # Khử nhiễu từng slice
             for i in range(len(slice_list)):
-                print(slice_list[i].shape)
                 slice_list[i], _ = self.p_sample_ddim(slice_list[i], conditioning, ts, index,
                                           unconditional_guidance_scale=unconditional_guidance_scale,
                                           unconditional_conditioning=unconditional_conditioning)
