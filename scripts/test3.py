@@ -59,6 +59,8 @@ def generate_slice_with_context(
     H,
     W,
     leading_latents_dict=None, # Dictionary latent trung gian từ slice trước
+    clip_ratio=0.375, # <--- Nhận tham số động
+    tail_ratio=0.125,
     slice_index=0,
     num_slices=1
 ):
@@ -86,7 +88,8 @@ def generate_slice_with_context(
         leading_latents=leading_latents_dict, # <-- TRUYỀN DICTIONARY LATENT TỪ SLICE TRƯỚC VÀO SAMPLER
         eta=0.0,
         return_latent_t_dict=True, # <-- Bật cờ để lấy latent trung gian
-        clip_ratio=0.25, tail_ratio=0.1
+        clip_ratio=clip_ratio, # <--- TRUYỀN THAM SỐ ĐỘNG
+        tail_ratio=tail_ratio
     )
 
     # Chỉ trả về latent cuối cùng (x_0) và dictionary latent trung gian (x_t)
@@ -134,18 +137,19 @@ def generate_longer_panorama(
     W,
     steps,
     num_slices,
-    overlap_ratio=0.25,
+    overlap_ratio=0.35, # <--- Tăng nhẹ Overlap để cải thiện độ mượt
+    tail_ratio=0.1,    # <--- Tham số tinh chỉnh Latent Swap
 ):
     latent_H = H // 8
     latent_W = W // 8
     
-    # panorama này không cần thiết nếu ta nối chuỗi, nhưng giữ lại cho đầy đủ
-    # panorama = init_latent_panorama(model, H, W, num_slices) 
-
     slices = []
-    previous_latent_dict = None # Dictionary latent context cho Latent Swap
+    previous_latent_dict = None
     final_panorama = None
     overlap_w = int(latent_W * overlap_ratio)
+
+    # ĐỒNG BỘ HÓA: clip_ratio phải bằng overlap_ratio để Latent Swap dẫn hướng vùng blend
+    latent_clip_ratio = overlap_ratio
 
     for i in tqdm(range(num_slices), desc="Generating slices"):
 
@@ -157,40 +161,32 @@ def generate_longer_panorama(
             steps,
             H,
             W,
-            leading_latents_dict=previous_latent_dict, # <-- Latent Swap Context
+            leading_latents_dict=previous_latent_dict,
+            clip_ratio=latent_clip_ratio, # <-- Dùng overlap_ratio
+            tail_ratio=tail_ratio,       # <-- Dùng tail_ratio đã tinh chỉnh
             slice_index=i,
             num_slices=num_slices
         )
         
-        # 2) Blend với slice trước đó (ở bước latent cuối cùng x_0)
+        # 2) Blend và Nối (CHỈ THỰC HIỆN 1 LẦN)
         if i > 0:
-            # Slices[i-1] là latent x0 của slice trước đó (sau khi đã được blend)
+            # a. Blend x_0 giữa slice trước (slices[i-1]) và slice hiện tại (slice_latent)
             slices[i-1], slice_latent = blend_overlap(slices[i-1], slice_latent, overlap_w)
             
-            # Nối phần latent không chồng lấn mới vào panorama cuối cùng
+            # b. Nối phần KHÔNG chồng lấn của slice hiện tại vào panorama
             # Lấy phần KHÔNG BỊ TRÙNG LẶP của slice hiện tại (từ vị trí overlap_w đến hết)
             non_overlap_part = slice_latent[:, :, :, overlap_w:]
             final_panorama = torch.cat([final_panorama, non_overlap_part], dim=-1)
         else:
-            # Slice đầu tiên: Khởi tạo panorama bằng phần không overlap của slice đầu tiên
-            final_panorama = slice_latent[:, :, :, :-overlap_w]
+            # Slice đầu tiên: Khởi tạo panorama bằng phần không overlap (chờ nối)
+            final_panorama = slice_latent[:, :, :, :-overlap_w] # <-- Lấy phần đầu, trừ phần overlap cuối
             
         # 3) Lưu latent cuối cùng và cập nhật dictionary latent context cho slice tiếp theo
         slices.append(slice_latent)
         previous_latent_dict = current_latent_dict # <-- CẬP NHẬT CONTEXT
 
-    # Lấy phần KHÔNG chồng lấn của slice đầu tiên
-    final_panorama = slices[0][:, :, :, :-overlap_w]
-
-    for i in range(1, num_slices):
-        sl = slices[i]
-        
-        # Lấy phần KHÔNG chồng lấn của slice i (từ overlap_w đến hết)
-        non_overlap_part = sl[:, :, :, overlap_w:]
-        
-        # Nối tiếp vào panorama cuối cùng
-        final_panorama = torch.cat([final_panorama, non_overlap_part], dim=-1)
-
+    # LOẠI BỎ logic nối chuỗi lặp lại ở đây.
+    
     return final_panorama, slices
 
 # -----------------------------
@@ -240,10 +236,10 @@ if __name__ == "__main__":
         sampler, model,
         prompt="a beautiful landscape with grass, trees, river, mountains and sky",
         num_slices=4, # Đặt số slice nhỏ để test
-        steps=200, # Giảm bước để test nhanh
+        steps=100, # Giảm bước để test nhanh
         H=512,
         W=512,
-        overlap_ratio=0.25
+        overlap_ratio=0.35
     )
 
     final_image = decode_panorama(model, panorama_latent)
