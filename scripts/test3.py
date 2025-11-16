@@ -86,7 +86,7 @@ def generate_slice_with_context(
         leading_latents=leading_latents_dict, # <-- TRUYỀN DICTIONARY LATENT TỪ SLICE TRƯỚC VÀO SAMPLER
         eta=0.0,
         return_latent_t_dict=True, # <-- Bật cờ để lấy latent trung gian
-        clip_ratio=0.375, tail_ratio=0.0
+        clip_ratio=0.25, tail_ratio=0.1
     )
 
     # Chỉ trả về latent cuối cùng (x_0) và dictionary latent trung gian (x_t)
@@ -243,7 +243,7 @@ if __name__ == "__main__":
         steps=200, # Giảm bước để test nhanh
         H=512,
         W=512,
-        overlap_ratio=0.375
+        overlap_ratio=0.25
     )
 
     final_image = decode_panorama(model, panorama_latent)
