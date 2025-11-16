@@ -439,6 +439,7 @@ class DDIMSampler(object):
         # sampling
         device = conditioning.device
         panorama_shape = tile_shape
+        w = tile_shape[-1]
         panorama_shape[-1] = int(w + w * (num_slices - 1) * (1 - overlap_ratio))
         J = torch.randn(panorama_shape).to(device)
         # Lập qua mỗi slice theo overlap_ratio, ở mỗi bước lấy slice đó ra từ J, 
