@@ -11,25 +11,6 @@ sys.path.append('.')
 
 from ldm.models.diffusion.ddim import DDIMSampler
 from ldm.util import instantiate_from_config
-from transformers import CLIPModel, CLIPProcessor
-
-
-# -----------------------------
-# Load CLIP for cross-slice conditioning
-# -----------------------------
-
-clip_model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14").cuda().eval()
-clip_proc  = CLIPProcessor.from_pretrained("openai/clip-vit-large-patch14")
-
-
-def get_clip_embedding(image_np):
-    """ encodes numpy array image to CLIP embeddings """
-    image_pil = Image.fromarray(image_np)
-    inputs = clip_proc(images=image_pil, return_tensors="pt").to("cuda")
-    with torch.no_grad():
-        feats = clip_model.get_image_features(**inputs)
-    feats = feats / feats.norm(dim=-1, keepdim=True)
-    return feats.float().cpu()
 
 
 # -----------------------------
@@ -48,126 +29,168 @@ def load_model_from_config(config, ckpt, device_name='cpu', verbose=False):
     model.eval()
     return model
 
+# --------------------------------------------------------
+# 1) Create a large latent panorama for global consistency
+# --------------------------------------------------------
+def init_latent_panorama(model, H, W, num_slices):
+    C = 4
+    latent_H = H // 8
+    latent_W = W // 8
 
-# -----------------------------
-# Decode latent slice
-# -----------------------------
-def decode_latent(model, latent):
-    latent = latent.to(model.device, dtype=next(model.first_stage_model.parameters()).dtype)
-    x = model.decode_first_stage(latent)
-    x = torch.clamp((x + 1) / 2, 0, 1)
-    img = (x[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
-    return img
-
-
-# -----------------------------
-# Generate a patch of latent
-# -----------------------------
-def generate_latent_patch(
-        sampler, model, prompt_embed, steps, 
-        H_lat, W_lat, leading_latents=None):
-
-    samples, intermediates = sampler.sample(
-        S=steps,
-        batch_size=1,
-        shape=(4, H_lat, W_lat),
-        conditioning=prompt_embed,
-        unconditional_guidance_scale=5.0,
-        unconditional_conditioning=model.get_learned_conditioning([""]),
-        eta=0.0,
-        leading_latents=leading_latents,
-        clip_ratio=0.375,
-        tail_ratio=0.125,
-        return_latent_t_dict=True
+    # Big panorama latent canvas
+    panorama = torch.randn(
+        1, C, latent_H, latent_W * num_slices,
+        device=model.device,
+        dtype=next(model.parameters()).dtype
     )
-
-    final_latent, leading_out = samples
-    return final_latent, leading_out
-
-
-# -----------------------------
-# Build prompt conditioning with Cross-slice CLIP
-# -----------------------------
-def build_conditioning(model, text_prompt, prev_image=None, alpha=0.5):
-    text_cond = model.get_learned_conditioning([text_prompt])
-
-    if prev_image is None:
-        return text_cond
-
-    # --- CLIP embedding ---
-    clip_emb = get_clip_embedding(prev_image).to(text_cond.device)
-
-    # Align dims (broadcast)
-    clip_emb = clip_emb.unsqueeze(1)
-
-    # Mixed conditioning
-    mixed = alpha * text_cond + (1 - alpha) * clip_emb
-    return mixed
-
-
-# -----------------------------
-# MAIN: Latent Panorama Generation + Consistency tricks
-# -----------------------------
-def generate_latent_panorama(
-        sampler, model, prompt, 
-        num_slices=6, steps=60, H=512, W=512,
-        overlap_ratio=0.25
-    ):
-
-    H_lat = H // 8
-    W_lat = W // 8
-    overlap_lat = int(W_lat * overlap_ratio)
-
-    # Panorama latent size
-    panorama = torch.zeros(1, 4, H_lat, W_lat * num_slices).half().to(model.device)
-
-    prev_latent = None
-    prev_image = None
-    leading_latents = None
-
-    for i in range(num_slices):
-        print(f"Generating slice {i+1}/{num_slices}")
-
-        # ----- Conditioning -----
-        cond = build_conditioning(model, prompt, prev_image)
-
-        # ----- Generate latent patch using DDIM -----
-        latent_patch, leading_latents = generate_latent_patch(
-            sampler, model, cond, steps, 
-            H_lat, W_lat,
-            leading_latents=leading_latents
-        )
-
-        # ----- Overlap blending -----
-        if prev_latent is not None:
-            patch_left = latent_patch[:, :, :, :overlap_lat]
-            pano_right = panorama[:, :, :, i * W_lat - overlap_lat : i * W_lat]
-
-            blended = 0.5 * patch_left + 0.5 * pano_right
-            panorama[:, :, :, i * W_lat - overlap_lat : i * W_lat] = blended
-
-            panorama[:, :, :, i * W_lat : (i+1)*W_lat] = latent_patch[:, :, :, overlap_lat:]
-        else:
-            panorama[:, :, :, :W_lat] = latent_patch
-
-        # ----- decode preview slice for next conditioning -----
-        prev_latent = latent_patch
-        prev_image = decode_latent(model, latent_patch)
 
     return panorama
 
 
-# -----------------------------
-# Decode whole panorama to image
-# -----------------------------
-def decode_panorama(model, pano_latent):
-    pano = decode_latent(model, pano_latent)
-    return pano
+# --------------------------------------------------------
+# 2) Generate each slice into the panorama using latent passing
+# --------------------------------------------------------
+def generate_slice_with_context(
+    sampler,
+    model,
+    prompt,
+    steps,
+    H,
+    W,
+    left_latent_context=None,
+    slice_index=0,
+    num_slices=1
+):
+    C = 4
+    latent_H = H // 8
+    latent_W = W // 8
+
+    # Build conditioning
+    c = model.get_learned_conditioning([prompt])
+    uc = model.get_learned_conditioning([""])
+
+    # Prepare initial latent
+    shape = (C, latent_H, latent_W)
+
+    # Use left neighbor latent for consistency
+    samples, intermediates = sampler.sample(
+        S=steps,
+        batch_size=1,
+        shape=shape,
+        conditioning=c,
+        unconditional_conditioning=uc,
+        unconditional_guidance_scale=5.0,
+        leading_latents=left_latent_context,   # <--- PASS LATENT HERE
+        eta=0.0
+    )
+
+    return samples
 
 
-# ===========================================================
-#               RUN
-# ===========================================================
+# --------------------------------------------------------
+# 3) Latent overlap blending between adjacent slices
+# --------------------------------------------------------
+def blend_overlap(left, right, overlap_w):
+    """
+    left, right: tensors shape (1,4,H,W)
+    overlap_w: number of latent columns to blend
+    """
+    if overlap_w <= 0:
+        return left, right
+
+    L = left.clone()
+    R = right.clone()
+
+    # Left slice's right overlap region
+    L_overlap = L[:, :, :, -overlap_w:]
+    # Right slice's left overlap region
+    R_overlap = R[:, :, :, :overlap_w]
+
+    # Linear blend: 0 → 1 from left to right
+    alpha = torch.linspace(0, 1, overlap_w, device=L.device).view(1, 1, 1, -1)
+
+    blended_left = (1 - alpha) * L_overlap + alpha * R_overlap
+    blended_right = alpha * L_overlap + (1 - alpha) * R_overlap
+
+    # Write back
+    L[:, :, :, -overlap_w:] = blended_left
+    R[:, :, :, :overlap_w] = blended_right
+
+    return L, R
+
+
+# --------------------------------------------------------
+# 4) Full panorama extension pipeline (NO CLIP)
+# --------------------------------------------------------
+def generate_longer_panorama(
+    sampler,
+    model,
+    prompt,
+    H,
+    W,
+    steps,
+    num_slices,
+    overlap_ratio=0.25,   # 25% overlap region
+):
+    latent_H = H // 8
+    latent_W = W // 8
+
+    # Init panorama
+    panorama = init_latent_panorama(model, H, W, num_slices)
+
+    # Storage for slices
+    slices = []
+    previous_latent = None
+
+    overlap_w = int(latent_W * overlap_ratio)
+
+    for i in tqdm(range(num_slices), desc="Generating slices"):
+
+        # 1) Generate slice
+        slice_latent = generate_slice_with_context(
+            sampler,
+            model,
+            prompt,
+            steps,
+            H,
+            W,
+            left_latent_context=previous_latent,   # <--- PASS LATENT HERE
+            slice_index=i,
+            num_slices=num_slices
+        )
+
+        # 2) Blend with previous slice in latent-space
+        if i > 0:
+            slices[i-1], slice_latent = blend_overlap(slices[i-1], slice_latent, overlap_w)
+
+        # 3) Save
+        slices.append(slice_latent)
+        previous_latent = slice_latent
+
+    # -------------------------------------------------------------
+    #  Stitch slices into the large panorama (latent-space concate)
+    # -------------------------------------------------------------
+    for i, sl in enumerate(slices):
+        start = i * latent_W
+        end   = start + latent_W
+        panorama[:, :, :, start:end] = sl
+
+    return panorama, slices
+
+
+# --------------------------------------------------------
+# 5) Decode panorama into final image
+# --------------------------------------------------------
+def decode_panorama(model, panorama_latent):
+    decoder_dtype = next(model.first_stage_model.parameters()).dtype
+    panorama_latent = panorama_latent.to(model.device, dtype=decoder_dtype)
+
+    decoded = model.decode_first_stage(panorama_latent)
+    decoded = torch.clamp((decoded + 1) / 2, 0, 1)
+
+    img = (decoded[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
+    return img
+
 
 if __name__ == "__main__":
     device_name = "cuda" if torch.cuda.is_available() else "cpu"
@@ -176,7 +199,7 @@ if __name__ == "__main__":
     model  = load_model_from_config(config, "models/ldm/text2img-large/model.ckpt", device_name)
     sampler = DDIMSampler(model)
 
-    panorama_latent = generate_latent_panorama(
+    panorama_latent = generate_longer_panorama(
         sampler, model,
         prompt="a beautiful landscape with grass, trees, river, mountains and sky, ultra wide panorama",
         num_slices=5,
