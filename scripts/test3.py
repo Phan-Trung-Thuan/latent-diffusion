@@ -78,7 +78,7 @@ if __name__ == "__main__":
 
     panorama_latent = sampler.lsjd_sample(
         num_steps=100,
-        tile_shape=[4, 512 // 8, 512 // 8],
+        tile_shape=[1, 4, 512 // 8, 512 // 8],
         num_slices=10,
         conditioning=c,
         overlap_ratio=0.25,
