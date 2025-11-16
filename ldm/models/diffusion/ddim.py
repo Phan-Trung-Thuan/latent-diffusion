@@ -451,6 +451,7 @@ class DDIMSampler(object):
 
             # Khử nhiễu từng slice
             for i in range(len(slice_list)):
+                print(slice_list[i].shape)
                 slice_list[i], _ = self.p_sample_ddim(slice_list[i], conditioning, ts, index,
                                           unconditional_guidance_scale=unconditional_guidance_scale,
                                           unconditional_conditioning=unconditional_conditioning)
