@@ -238,7 +238,7 @@ if __name__ == "__main__":
 
     panorama_latent, slices = generate_longer_panorama(
         sampler, model,
-        prompt="a beautiful landscape with grass, trees, river, mountains and sky, ultra wide panorama, highly detailed, fantasy art",
+        prompt="a beautiful landscape with grass, trees, river, mountains and sky",
         num_slices=4, # Đặt số slice nhỏ để test
         steps=50, # Giảm bước để test nhanh
         H=512,
