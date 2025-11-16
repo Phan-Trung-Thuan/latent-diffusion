@@ -199,7 +199,7 @@ if __name__ == "__main__":
     model  = load_model_from_config(config, "models/ldm/text2img-large/model.ckpt", device_name)
     sampler = DDIMSampler(model)
 
-    panorama_latent = generate_longer_panorama(
+    panorama_latent, slices = generate_longer_panorama(
         sampler, model,
         prompt="a beautiful landscape with grass, trees, river, mountains and sky, ultra wide panorama",
         num_slices=5,
