@@ -404,7 +404,7 @@ class DDIMSampler(object):
         W_swap = torch.full_like(x1, v_m_scalar).to(device)
         W_swap_complement = 1.0 - W_swap
         
-        print(slice_index, W_swap.shape, x1.shape, W_swap_complement.shape, x2.shape)
+        # print(slice_index, W_swap.shape, x1.shape, W_swap_complement.shape, x2.shape)
         X_new = W_swap * x1 + W_swap_complement * x2
         return X_new
 
@@ -422,6 +422,7 @@ class DDIMSampler(object):
                     ):
         
         batch_size, _, _, w = tile_shape
+
         if conditioning is not None:
             if isinstance(conditioning, dict):
                 cbs = conditioning[list(conditioning.keys())[0]].shape[0]
@@ -439,8 +440,7 @@ class DDIMSampler(object):
         # sampling
         device = conditioning.device
         panorama_shape = tile_shape
-        w = tile_shape[-1]
-        panorama_shape[-1] = int(w + w * (num_slices - 1) * (1 - overlap_ratio))
+        panorama_shape[-1] = w + (num_slices - 1) * int(w * (1 - overlap_ratio))
         J = torch.randn(panorama_shape).to(device)
         # Lập qua mỗi slice theo overlap_ratio, ở mỗi bước lấy slice đó ra từ J, 
         slice_list = [J[..., i:i+w] for i in range(0, panorama_shape[-1], int(w * (1 - overlap_ratio)))]
