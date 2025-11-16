@@ -458,7 +458,7 @@ class DDIMSampler(object):
             for i in range(1, len(slice_list)):
                 right_prev_i = self._right(slice_list[i - 1], overlap_ratio)
                 left_i = self._left(slice_list[i], overlap_ratio)
-                swap_zone = self._swap(left_i, right_prev_i)
+                swap_zone = self._swap(left_i, right_prev_i, i-1)
 
                 overlap_w = int(w * overlap_ratio)
                 # Cập nhật phần bên phải của slice i-1
@@ -471,7 +471,7 @@ class DDIMSampler(object):
                 for i in range(1, len(slice_list)):
                     mid_0 = self._mid(slice_list[0], overlap_ratio)
                     mid_i = self._mid(slice_list[i], overlap_ratio)
-                    swap_zone = self._swap(mid_0, mid_i)
+                    swap_zone = self._swap(mid_0, mid_i, i)
 
                     overlap_w = int(w * overlap_ratio)
                     # Cập nhật phần giữa của slice i
