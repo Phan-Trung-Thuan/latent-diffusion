@@ -96,6 +96,17 @@ def generate_longer_panorama_lsjd(
     # 2. Schedule and Overlap
     # ddim_schedule is a dictionary containing ddim_timesteps, ddim_alphas, etc.
     sampler.make_schedule(ddim_num_steps=steps, ddim_eta=0.0, verbose=False)
+    
+    # LẤY CÁC BIẾN CẦN THIẾT TỪ SAMPLER
+    # LƯU Ý: sampler.make_schedule tạo ra các thuộc tính này trên đối tượng sampler.
+    # Trong phiên bản DDIMSampler bạn cung cấp, các thuộc tính này tồn tại:
+    # ddim_alphas, ddim_alphas_prev, ddim_sqrt_one_minus_alphas
+    
+    # KHẮC PHỤC LỖI: Tính toán ddim_sqrt_one_minus_alphas_prev thủ công
+    # vì nó không có trong DDIMSampler của người dùng.
+    ddim_alphas_prev = sampler.ddim_alphas_prev.cpu()
+    ddim_sqrt_one_minus_alphas_prev = torch.sqrt(1. - ddim_alphas_prev).to(device)
+
     ddim_timesteps = sampler.ddim_timesteps
     time_range = np.asarray(ddim_timesteps)[::-1]
     total_steps = ddim_timesteps.shape[0]
@@ -153,7 +164,8 @@ def generate_longer_panorama_lsjd(
                     # DDIM Step (Reverse)
                     # --------------------
                     a_prev = sampler.ddim_alphas_prev[i]
-                    sqrt_one_minus_at_prev = sampler.ddim_sqrt_one_minus_alphas_prev[i]
+                    # SỬ DỤNG BIẾN ĐÃ TÍNH TOÁN THỦ CÔNG
+                    sqrt_one_minus_at_prev = ddim_sqrt_one_minus_alphas_prev[i] 
 
                     # x_{t-1} = sqrt(alpha_t-1) * pred_x0 + sqrt(1 - alpha_t-1) * e_t_cfg
                     dir_xt = sqrt_one_minus_at_prev * e_t_cfg
@@ -184,7 +196,6 @@ def generate_longer_panorama_lsjd(
     
     # Return the single stitched latent tensor
     return panorama_latent, latents_list
-
 
 # -----------------------------
 # 3) Decode panorama (Unchanged)
