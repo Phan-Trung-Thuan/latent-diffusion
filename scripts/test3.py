@@ -104,7 +104,7 @@ def generate_longer_panorama_lsjd(
     
     # KHẮC PHỤC LỖI: Tính toán ddim_sqrt_one_minus_alphas_prev thủ công
     # vì nó không có trong DDIMSampler của người dùng.
-    ddim_alphas_prev = sampler.ddim_alphas_prev.cpu()
+    ddim_alphas_prev = torch.as_tensor(sampler.ddim_alphas_prev, device=device, dtype=dtype)
     ddim_sqrt_one_minus_alphas_prev = torch.sqrt(1. - ddim_alphas_prev).to(device)
 
     ddim_timesteps = sampler.ddim_timesteps
