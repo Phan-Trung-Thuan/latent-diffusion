@@ -439,7 +439,7 @@ class DDIMSampler(object):
 
         # sampling
         device = conditioning.device
-        panorama_shape = tile_shape
+        panorama_shape = list(tile_shape)
         stride = int(w * (1 - overlap_ratio))
         panorama_shape[-1] = w + (num_slices - 1) * stride
         J = torch.randn(panorama_shape).to(device)
