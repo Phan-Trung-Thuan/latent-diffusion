@@ -85,7 +85,8 @@ def generate_slice_with_context(
         unconditional_guidance_scale=5.0,
         leading_latents=leading_latents_dict, # <-- TRUYỀN DICTIONARY LATENT TỪ SLICE TRƯỚC VÀO SAMPLER
         eta=0.0,
-        return_latent_t_dict=True # <-- Bật cờ để lấy latent trung gian
+        return_latent_t_dict=True, # <-- Bật cờ để lấy latent trung gian
+        clip_ratio=0.375, tail_ratio=0.0
     )
 
     # Chỉ trả về latent cuối cùng (x_0) và dictionary latent trung gian (x_t)
