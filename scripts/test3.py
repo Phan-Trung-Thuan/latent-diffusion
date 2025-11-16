@@ -97,15 +97,17 @@ def generate_longer_panorama_lsjd(
     # ddim_schedule is a dictionary containing ddim_timesteps, ddim_alphas, etc.
     sampler.make_schedule(ddim_num_steps=steps, ddim_eta=0.0, verbose=False)
     
-    # LẤY CÁC BIẾN CẦN THIẾT TỪ SAMPLER
-    # LƯU Ý: sampler.make_schedule tạo ra các thuộc tính này trên đối tượng sampler.
-    # Trong phiên bản DDIMSampler bạn cung cấp, các thuộc tính này tồn tại:
-    # ddim_alphas, ddim_alphas_prev, ddim_sqrt_one_minus_alphas
+    # KHẮC PHỤC LỖI: Đảm bảo tất cả các tham số lịch trình (schedule parameters) là PyTorch Tensors 
+    # và tránh sử dụng .cpu() trên các đối tượng numpy.ndarray.
     
-    # KHẮC PHỤC LỖI: Tính toán ddim_sqrt_one_minus_alphas_prev thủ công
-    # vì nó không có trong DDIMSampler của người dùng.
-    ddim_alphas_prev = torch.as_tensor(sampler.ddim_alphas_prev, device=device, dtype=dtype)
-    ddim_sqrt_one_minus_alphas_prev = torch.sqrt(1. - ddim_alphas_prev).to(device)
+    # 1. Chuyển ddim_alphas_prev sang Tensor và tính sqrt_one_minus_alphas_prev.
+    # Dùng torch.as_tensor để xử lý NumPy array hoặc Tensor. Thêm .float() để nhất quán kiểu.
+    ddim_alphas_prev_tensor = torch.as_tensor(sampler.ddim_alphas_prev, device=device, dtype=dtype)
+    ddim_sqrt_one_minus_alphas_prev = torch.sqrt(1. - ddim_alphas_prev_tensor)
+
+    # 2. Chuyển ddim_alphas và ddim_sqrt_one_minus_alphas sang Tensor.
+    ddim_alphas_tensor = torch.as_tensor(sampler.ddim_alphas, device=device, dtype=dtype)
+    ddim_sqrt_one_minus_alphas_tensor = torch.as_tensor(sampler.ddim_sqrt_one_minus_alphas, device=device, dtype=dtype)
 
     ddim_timesteps = sampler.ddim_timesteps
     time_range = np.asarray(ddim_timesteps)[::-1]
@@ -144,8 +146,10 @@ def generate_longer_panorama_lsjd(
                     e_t_cfg = e_t_uncond + cfg_scale * (e_t - e_t_uncond)
 
                     # 3. Predict the original image latent (x0)
-                    a_t = sampler.ddim_alphas[i] # alpha_t
-                    sqrt_one_minus_at = sampler.ddim_sqrt_one_minus_alphas[i]
+                    # SỬ DỤNG TENSORS ĐÃ CHUYỂN ĐỔI (Slicing [i:i+1] để giữ nguyên là Tensor):
+                    a_t = ddim_alphas_tensor[i:i+1] 
+                    sqrt_one_minus_at = ddim_sqrt_one_minus_alphas_tensor[i:i+1]
+                    
                     pred_x0 = (x_t - sqrt_one_minus_at * e_t_cfg) / torch.sqrt(a_t)
 
                     all_x0_preds.append(pred_x0)
@@ -163,9 +167,7 @@ def generate_longer_panorama_lsjd(
                     
                     # DDIM Step (Reverse)
                     # --------------------
-                    # SỬ DỤNG TENSORS ĐÃ CHUYỂN ĐỔI:
-                    # KHẮC PHỤC LỖI: Dùng slicing [i:i+1] thay vì indexing [i] để đảm bảo 
-                    # giá trị vẫn là 1-element Tensor, tránh bị hiểu nhầm là numpy.float64.
+                    # SỬ DỤNG TENSORS ĐÃ CHUYỂN ĐỔI (Slicing [i:i+1] để giữ nguyên là Tensor):
                     a_prev = ddim_alphas_prev_tensor[i:i+1]
                     sqrt_one_minus_at_prev = ddim_sqrt_one_minus_alphas_prev[i:i+1] 
 
@@ -198,6 +200,7 @@ def generate_longer_panorama_lsjd(
     
     # Return the single stitched latent tensor
     return panorama_latent, latents_list
+
 
 # -----------------------------
 # 3) Decode panorama (Unchanged)
