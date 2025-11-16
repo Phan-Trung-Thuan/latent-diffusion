@@ -163,9 +163,11 @@ def generate_longer_panorama_lsjd(
                     
                     # DDIM Step (Reverse)
                     # --------------------
-                    a_prev = sampler.ddim_alphas_prev[i]
-                    # SỬ DỤNG BIẾN ĐÃ TÍNH TOÁN THỦ CÔNG
-                    sqrt_one_minus_at_prev = ddim_sqrt_one_minus_alphas_prev[i] 
+                    # SỬ DỤNG TENSORS ĐÃ CHUYỂN ĐỔI:
+                    # KHẮC PHỤC LỖI: Dùng slicing [i:i+1] thay vì indexing [i] để đảm bảo 
+                    # giá trị vẫn là 1-element Tensor, tránh bị hiểu nhầm là numpy.float64.
+                    a_prev = ddim_alphas_prev_tensor[i:i+1]
+                    sqrt_one_minus_at_prev = ddim_sqrt_one_minus_alphas_prev[i:i+1] 
 
                     # x_{t-1} = sqrt(alpha_t-1) * pred_x0 + sqrt(1 - alpha_t-1) * e_t_cfg
                     dir_xt = sqrt_one_minus_at_prev * e_t_cfg
