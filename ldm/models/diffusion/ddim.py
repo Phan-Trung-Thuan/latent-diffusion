@@ -226,7 +226,12 @@ class DDIMSampler(object):
                                                      tail_ratio=tail_ratio,
                                                      return_latent_t_dict=return_latent_t_dict,
                                                      )
-        return samples, intermediates
+        
+        if return_latent_t_dict:
+            final_img, latent_t_dict = samples
+            return final_img, intermediates, latent_t_dict
+        else:
+            return samples, intermediates
 
     @torch.no_grad()
     def ddim_sampling(self, cond, shape,

@@ -29,48 +29,107 @@ def load_model_from_config(config, ckpt, device_name='cpu', verbose=False):
     model.eval()
     return model
 
-# -----------------------------
-# 0) Synchronization Core (LSJD Logic)
-# -----------------------------
-def synchronize_latents(latents_x0_list, overlap_w):
+
+# --------------------------------------------------------
+# 1) Create a large latent panorama for global consistency (GIỮ NGUYÊN)
+# --------------------------------------------------------
+def init_latent_panorama(model, H, W, num_slices):
+    C = 4
+    latent_H = H // 8
+    latent_W = W // 8
+
+    # Big panorama latent canvas
+    panorama = torch.randn(
+        1, C, latent_H, latent_W * num_slices,
+        device=model.device,
+        dtype=next(model.parameters()).dtype
+    )
+
+    return panorama
+
+
+# --------------------------------------------------------
+# 2) Generate each slice with Latent Context (ĐÃ SỬA ĐỔI)
+# --------------------------------------------------------
+def generate_slice_with_context(
+    sampler,
+    model,
+    prompt,
+    steps,
+    H,
+    W,
+    leading_latents_dict=None, # Dictionary latent trung gian từ slice trước
+    slice_index=0,
+    num_slices=1
+):
+    C = 4
+    latent_H = H // 8
+    latent_W = W // 8
+    device = model.device
+
+    # Build conditioning
+    c = model.get_learned_conditioning([prompt])
+    uc = model.get_learned_conditioning([""])
+
+    # Prepare initial latent
+    shape = (C, latent_H, latent_W)
+
+    # Lấy mẫu. Cần return_latent_t_dict=True để lấy latent trung gian cho slice tiếp theo
+    # Lưu ý: sampler.sample đã được sửa để trả về (final_latent, intermediates, latent_t_dict)
+    final_latent, intermediates, latent_t_dict = sampler.sample(
+        S=steps,
+        batch_size=1,
+        shape=shape,
+        conditioning=c,
+        unconditional_conditioning=uc,
+        unconditional_guidance_scale=5.0,
+        leading_latents=leading_latents_dict, # <-- TRUYỀN DICTIONARY LATENT TỪ SLICE TRƯỚC VÀO SAMPLER
+        eta=0.0,
+        return_latent_t_dict=True # <-- Bật cờ để lấy latent trung gian
+    )
+
+    # Chỉ trả về latent cuối cùng (x_0) và dictionary latent trung gian (x_t)
+    return final_latent, latent_t_dict
+
+
+# --------------------------------------------------------
+# 3) Latent overlap blending between adjacent slices (GIỮ NGUYÊN)
+# --------------------------------------------------------
+def blend_overlap(left, right, overlap_w):
     """
-    Applies Latent Swap (Averaging) to the predicted denoised estimates (x0)
-    in the overlap regions across all adjacent slices.
-    This is the core of Joint Diffusion for seam removal.
-
-    Args:
-        latents_x0_list (list of Tensors): List of predicted x0 for all slices.
-        overlap_w (int): Number of latent columns to blend.
+    left, right: tensors shape (1,4,H,W)
+    overlap_w: number of latent columns to blend
     """
-    if overlap_w <= 0 or len(latents_x0_list) < 2:
-        return latents_x0_list
+    if overlap_w <= 0:
+        return left, right
 
-    # Process all adjacent pairs
-    for i in range(len(latents_x0_list) - 1):
-        left_x0 = latents_x0_list[i]
-        right_x0 = latents_x0_list[i+1]
+    L = left.clone()
+    R = right.clone()
+    device = L.device
 
-        # 1. Define Overlap Regions
-        L_overlap = left_x0[:, :, :, -overlap_w:]
-        R_overlap = right_x0[:, :, :, :overlap_w]
+    # Left slice's right overlap region
+    L_overlap = L[:, :, :, -overlap_w:]
+    # Right slice's left overlap region
+    R_overlap = R[:, :, :, :overlap_w]
 
-        # 2. Linear Blend: 0 → 1 from left (L) to right (R)
-        # alpha is the weight of the RIGHT tensor
-        alpha = torch.linspace(0, 1, overlap_w, device=left_x0.device).view(1, 1, 1, -1)
+    # Linear blend: 0 → 1 from left to right
+    alpha = torch.linspace(0, 1, overlap_w, device=device).view(1, 1, 1, -1)
 
-        # Blended value = (Weight of Left) * Left_Value + (Weight of Right) * Right_Value
-        blended_overlap = (1 - alpha) * L_overlap + alpha * R_overlap
+    # Blend cả hai phía (thường chỉ cần 1 trong 2 công thức cho blended_left hoặc blended_right,
+    # nhưng ta giữ nguyên logic của bạn)
+    blended_overlap = (1 - alpha) * L_overlap + alpha * R_overlap
 
-        # 3. Write Blended Overlap back to BOTH slices
-        latents_x0_list[i][:, :, :, -overlap_w:] = blended_overlap
-        latents_x0_list[i+1][:, :, :, :overlap_w] = blended_overlap
+    # Write back
+    L[:, :, :, -overlap_w:] = blended_overlap
+    R[:, :, :, :overlap_w] = blended_overlap
 
-    return latents_x0_list
+    return L, R
 
-# -----------------------------
-# 2) LSJD Sampling Loop
-# -----------------------------
-def generate_longer_panorama_lsjd(
+
+# --------------------------------------------------------
+# 4) Full panorama extension pipeline (ĐÃ SỬA ĐỔI)
+# --------------------------------------------------------
+def generate_longer_panorama(
     sampler,
     model,
     prompt,
@@ -78,129 +137,53 @@ def generate_longer_panorama_lsjd(
     W,
     steps,
     num_slices,
-    overlap_ratio=0.30,
-    cfg_scale=5.0
+    overlap_ratio=0.25,
 ):
     latent_H = H // 8
     latent_W = W // 8
-    C = 4
-    device = model.device
-    dtype = next(model.parameters()).dtype
-
-    # 1. Conditioning
-    c = model.get_learned_conditioning([prompt])
-    uc = model.get_learned_conditioning([""])
-    uc_full = uc
-    c_full = c
-
-    # 2. Schedule and Overlap
-    # ddim_schedule is a dictionary containing ddim_timesteps, ddim_alphas, etc.
-    sampler.make_schedule(ddim_num_steps=steps, ddim_eta=0.0, verbose=False)
     
-    # KHẮC PHỤC LỖI: Đảm bảo tất cả các tham số lịch trình (schedule parameters) là PyTorch Tensors 
-    # và tránh sử dụng .cpu() trên các đối tượng numpy.ndarray.
-    
-    # 1. Chuyển ddim_alphas_prev sang Tensor và tính sqrt_one_minus_alphas_prev.
-    # Dùng torch.as_tensor để xử lý NumPy array hoặc Tensor. Thêm .float() để nhất quán kiểu.
-    ddim_alphas_prev_tensor = torch.as_tensor(sampler.ddim_alphas_prev, device=device, dtype=dtype)
-    ddim_sqrt_one_minus_alphas_prev = torch.sqrt(1. - ddim_alphas_prev_tensor)
+    # panorama này không cần thiết nếu ta nối chuỗi, nhưng giữ lại cho đầy đủ
+    # panorama = init_latent_panorama(model, H, W, num_slices) 
 
-    # 2. Chuyển ddim_alphas và ddim_sqrt_one_minus_alphas sang Tensor.
-    ddim_alphas_tensor = torch.as_tensor(sampler.ddim_alphas, device=device, dtype=dtype)
-    ddim_sqrt_one_minus_alphas_tensor = torch.as_tensor(sampler.ddim_sqrt_one_minus_alphas, device=device, dtype=dtype)
-
-    ddim_timesteps = sampler.ddim_timesteps
-    time_range = np.asarray(ddim_timesteps)[::-1]
-    total_steps = ddim_timesteps.shape[0]
-
+    slices = []
+    previous_latent_dict = None # Dictionary latent context cho Latent Swap
+    final_panorama = None
     overlap_w = int(latent_W * overlap_ratio)
 
-    # 3. Initialize Latents (All slices start as pure noise)
-    latents_list = []
-    for _ in range(num_slices):
-        noise = torch.randn(1, C, latent_H, latent_W, device=device, dtype=dtype)
-        latents_list.append(noise)
+    for i in tqdm(range(num_slices), desc="Generating slices"):
 
-    # 4. LSJD Denoising Loop
-    with torch.no_grad():
-        with tqdm(time_range, desc="LSJD Sampling (Joint Diffusion)") as t_iterator:
-            for i, step in enumerate(t_iterator):
-                ts = torch.full((1,), step, device=device, dtype=torch.long)
-
-                all_x0_preds = []
-                all_eps_preds = []
-
-                # A) Predict Noise and Estimate x0 for ALL slices
-                for x_t in latents_list:
-                    # DDIM Step (Forward)
-                    # --------------------
-                    # 1. Predict noise (epsilon)
-                    # Combine conditioning: [unconditional, conditional]
-                    x_in = torch.cat([x_t] * 2)
-                    t_in = torch.cat([ts] * 2)
-                    c_in = torch.cat([uc_full, c_full], dim=0)
-
-                    e_t_uncond, e_t = model.apply_model(x_in, t_in, c_in).chunk(2)
-
-                    # 2. Classifier-Free Guidance (CFG) on epsilon
-                    e_t_cfg = e_t_uncond + cfg_scale * (e_t - e_t_uncond)
-
-                    # 3. Predict the original image latent (x0)
-                    # SỬ DỤNG TENSORS ĐÃ CHUYỂN ĐỔI (Slicing [i:i+1] để giữ nguyên là Tensor):
-                    a_t = ddim_alphas_tensor[i:i+1] 
-                    sqrt_one_minus_at = ddim_sqrt_one_minus_alphas_tensor[i:i+1]
-                    
-                    pred_x0 = (x_t - sqrt_one_minus_at * e_t_cfg) / torch.sqrt(a_t)
-
-                    all_x0_preds.append(pred_x0)
-                    all_eps_preds.append(e_t_cfg)
-
-                # B) Latent Swap (Synchronization) - Apply on x0
-                # ------------------------------------------------
-                all_x0_preds_sync = synchronize_latents(all_x0_preds, overlap_w)
-
-                # C) Calculate next latent x_{t-1} using synchronized x0
-                # --------------------------------------------------------
-                for j in range(num_slices):
-                    pred_x0 = all_x0_preds_sync[j]
-                    e_t_cfg = all_eps_preds[j]
-                    
-                    # DDIM Step (Reverse)
-                    # --------------------
-                    # SỬ DỤNG TENSORS ĐÃ CHUYỂN ĐỔI (Slicing [i:i+1] để giữ nguyên là Tensor):
-                    a_prev = ddim_alphas_prev_tensor[i:i+1]
-                    sqrt_one_minus_at_prev = ddim_sqrt_one_minus_alphas_prev[i:i+1] 
-
-                    # x_{t-1} = sqrt(alpha_t-1) * pred_x0 + sqrt(1 - alpha_t-1) * e_t_cfg
-                    dir_xt = sqrt_one_minus_at_prev * e_t_cfg
-                    x_prev = torch.sqrt(a_prev) * pred_x0 + dir_xt
-
-                    latents_list[j] = x_prev
-
-    # 5. Stitch Final Latents
-    total_latent_W = latent_W * num_slices - overlap_w * (num_slices - 1)
-    
-    # Create the final panorama latent tensor
-    panorama_latent = torch.zeros(1, C, latent_H, total_latent_W, device=device, dtype=dtype)
-    current_w = 0
-
-    for i, sl in enumerate(latents_list):
-        if i == 0:
-            # First slice is fully included
-            panorama_latent[:, :, :, :latent_W] = sl
-            current_w += latent_W
-        else:
-            # Append remaining part of slice after overlap
-            start = current_w - overlap_w
-            end_append = latent_W - overlap_w
+        # 1) Generate slice và LƯU latent trung gian của nó
+        slice_latent, current_latent_dict = generate_slice_with_context(
+            sampler,
+            model,
+            prompt,
+            steps,
+            H,
+            W,
+            leading_latents_dict=previous_latent_dict, # <-- Latent Swap Context
+            slice_index=i,
+            num_slices=num_slices
+        )
+        
+        # 2) Blend với slice trước đó (ở bước latent cuối cùng x_0)
+        if i > 0:
+            # Slices[i-1] là latent x0 của slice trước đó (sau khi đã được blend)
+            slices[i-1], slice_latent = blend_overlap(slices[i-1], slice_latent, overlap_w)
             
-            # The overlap region is already synchronized in the previous slice's last part
-            panorama_latent[:, :, :, start:start + end_append] = sl[:, :, :, overlap_w:]
-            current_w += end_append
-    
-    # Return the single stitched latent tensor
-    return panorama_latent, latents_list
+            # Nối phần latent không chồng lấn mới vào panorama cuối cùng
+            # Lấy phần KHÔNG BỊ TRÙNG LẶP của slice hiện tại (từ vị trí overlap_w đến hết)
+            non_overlap_part = slice_latent[:, :, :, overlap_w:]
+            final_panorama = torch.cat([final_panorama, non_overlap_part], dim=-1)
+        else:
+            # Slice đầu tiên: Khởi tạo panorama bằng phần không overlap của slice đầu tiên
+            final_panorama = slice_latent[:, :, :, :-overlap_w]
+            
+        # 3) Lưu latent cuối cùng và cập nhật dictionary latent context cho slice tiếp theo
+        slices.append(slice_latent)
+        previous_latent_dict = current_latent_dict # <-- CẬP NHẬT CONTEXT
 
+    # Trả về panorama đã được nối (đã loại bỏ vùng overlap thừa) và danh sách slices (đã blend)
+    return final_panorama, slices
 
 # -----------------------------
 # 3) Decode panorama (Unchanged)
@@ -227,44 +210,35 @@ def decode_panorama(model, panorama_latent):
 
 if __name__ == "__main__":
     device_name = "cuda" if torch.cuda.is_available() else "cpu"
-
-    config = OmegaConf.load("configs/latent-diffusion/txt2img-1p4B-eval.yaml")
-    model  = load_model_from_config(config, "models/ldm/text2img-large/model.ckpt", device_name)
+    if device_name == "cuda":
+        torch.backends.cudnn.benchmark = True
+    
+    # -------------------------------------------------------------
+    #  Khởi tạo và chạy model (giữ nguyên)
+    # -------------------------------------------------------------
+    config_path = "configs/latent-diffusion/txt2img-1p4B-eval.yaml"
+    ckpt_path = "models/ldm/text2img-large/model.ckpt" # Thay đổi path này nếu cần
+    
+    if not os.path.exists(config_path) or not os.path.exists(ckpt_path):
+        print("Lỗi: Không tìm thấy file config hoặc checkpoint.")
+        print(f"Kiểm tra đường dẫn: {config_path} và {ckpt_path}")
+        #sys.exit(1) # Lỗi nếu không tìm thấy file
+    
+    config = OmegaConf.load(config_path)
+    model  = load_model_from_config(config, ckpt_path, device_name)
     sampler = DDIMSampler(model)
 
-    # Parameters for the long-form generation (e.g., 5 slices of 512x512)
-    NUM_SLICES = 5
-    IMAGE_H = 512
-    IMAGE_W = 512
-    STEPS = 50 # Reduced steps for faster testing
-    OVERLAP_RATIO = 0.30 # 30% latent overlap
-
-    print(f"Bắt đầu Tạo Panorama LSJD với {NUM_SLICES} lát cắt ({IMAGE_H}x{IMAGE_W})")
-    print(f"Tỉ lệ chồng lấn: {OVERLAP_RATIO:.0%}")
-    
-    # The latent width of each slice
-    latent_W = IMAGE_W // 8
-    # The width of the overlap region in latent space
-    overlap_w = int(latent_W * OVERLAP_RATIO)
-    print(f"Chiều rộng Latent lát cắt: {latent_W} | Chiều rộng Latent chồng lấn: {overlap_w}")
-
-    panorama_latent, slices = generate_longer_panorama_lsjd(
+    panorama_latent, slices = generate_longer_panorama(
         sampler, model,
-        prompt="a majestic ultra wide panorama of a medieval castle on a rocky cliff overlooking a stormy ocean, dramatic lighting, highly detailed, fantasy art",
-        num_slices=NUM_SLICES,
-        steps=STEPS,
-        H=IMAGE_H,
-        W=IMAGE_W,
-        overlap_ratio=OVERLAP_RATIO
+        prompt="a beautiful landscape with grass, trees, river, mountains and sky, ultra wide panorama, highly detailed, fantasy art",
+        num_slices=4, # Đặt số slice nhỏ để test
+        steps=50, # Giảm bước để test nhanh
+        H=512,
+        W=512,
+        overlap_ratio=0.25
     )
 
     final_image = decode_panorama(model, panorama_latent)
-    output_filename = "lsjd_panorama_output.png"
-    Image.fromarray(final_image).save(output_filename)
+    Image.fromarray(final_image).save("panorama_with_latent_swap_output.png")
 
-    print(f"\n--- Quá trình hoàn tất ---")
-    print(f"Panorama LSJD đã được lưu thành {output_filename}")
-    # Calculate final pixel resolution
-    final_W = final_image.shape[1]
-    final_H = final_image.shape[0]
-    print(f"Độ phân giải ảnh cuối cùng: {final_W}x{final_H}")
+    print("Saved panorama_with_latent_swap_output.png")
