@@ -379,7 +379,7 @@ class DDIMSampler(object):
     
 
     def _right(self, x, overlap_ratio):
-        print(x)
+        print(len(x))
         _, _, _, w = x.shape
         overlap_w = int(w * overlap_ratio)
         return x[..., -overlap_w:]
