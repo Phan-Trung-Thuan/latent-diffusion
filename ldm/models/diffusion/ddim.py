@@ -379,9 +379,6 @@ class DDIMSampler(object):
     
 
     def _right(self, x, overlap_ratio):
-        print(x[0])
-
-        print(x[1])
         _, _, _, w = x.shape
         overlap_w = int(w * overlap_ratio)
         return x[..., -overlap_w:]
@@ -452,11 +449,10 @@ class DDIMSampler(object):
             index = total_steps - n - 1
 
             # Khử nhiễu từng slice
-            for i, slice in enumerate(slice_list):
-                slice = self.p_sample_ddim(slice, conditioning, ts, index,
+            for i in range(len(slice_list)):
+                slice_list[i], _ = self.p_sample_ddim(slice_list[i], conditioning, ts, index,
                                           unconditional_guidance_scale=unconditional_guidance_scale,
                                           unconditional_conditioning=unconditional_conditioning)
-                slice_list[i] = slice
             
             # Xử lý Self-Loop Latent Swap
             for i in range(1, len(slice_list)):
