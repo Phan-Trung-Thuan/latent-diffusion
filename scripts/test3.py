@@ -97,8 +97,7 @@ def generate_slice_with_context(
 # --------------------------------------------------------
 def blend_overlap(left, right, overlap_w):
     """
-    left, right: tensors shape (1,4,H,W)
-    overlap_w: number of latent columns to blend
+    Sửa lỗi: Chỉ tính toán giá trị blend một lần và gán lại cho cả hai slice.
     """
     if overlap_w <= 0:
         return left, right
@@ -107,21 +106,18 @@ def blend_overlap(left, right, overlap_w):
     R = right.clone()
     device = L.device
 
-    # Left slice's right overlap region
     L_overlap = L[:, :, :, -overlap_w:]
-    # Right slice's left overlap region
     R_overlap = R[:, :, :, :overlap_w]
 
-    # Linear blend: 0 → 1 from left to right
+    # Linear blend: alpha chạy từ 0 (cực trái L) đến 1 (cực phải R)
     alpha = torch.linspace(0, 1, overlap_w, device=device).view(1, 1, 1, -1)
 
-    # Blend cả hai phía (thường chỉ cần 1 trong 2 công thức cho blended_left hoặc blended_right,
-    # nhưng ta giữ nguyên logic của bạn)
-    blended_overlap = (1 - alpha) * L_overlap + alpha * R_overlap
+    # Tính toán giá trị blend duy nhất
+    blended_value = (1 - alpha) * L_overlap + alpha * R_overlap 
 
-    # Write back
-    L[:, :, :, -overlap_w:] = blended_overlap
-    R[:, :, :, :overlap_w] = blended_overlap
+    # Ghi đè giá trị blend vào vùng overlap của cả hai slice
+    L[:, :, :, -overlap_w:] = blended_value
+    R[:, :, :, :overlap_w] = blended_value
 
     return L, R
 
@@ -182,7 +178,18 @@ def generate_longer_panorama(
         slices.append(slice_latent)
         previous_latent_dict = current_latent_dict # <-- CẬP NHẬT CONTEXT
 
-    # Trả về panorama đã được nối (đã loại bỏ vùng overlap thừa) và danh sách slices (đã blend)
+    # Lấy phần KHÔNG chồng lấn của slice đầu tiên
+    final_panorama = slices[0][:, :, :, :-overlap_w]
+
+    for i in range(1, num_slices):
+        sl = slices[i]
+        
+        # Lấy phần KHÔNG chồng lấn của slice i (từ overlap_w đến hết)
+        non_overlap_part = sl[:, :, :, overlap_w:]
+        
+        # Nối tiếp vào panorama cuối cùng
+        final_panorama = torch.cat([final_panorama, non_overlap_part], dim=-1)
+
     return final_panorama, slices
 
 # -----------------------------
@@ -235,7 +242,7 @@ if __name__ == "__main__":
         steps=50, # Giảm bước để test nhanh
         H=512,
         W=512,
-        overlap_ratio=0.25
+        overlap_ratio=0.375
     )
 
     final_image = decode_panorama(model, panorama_latent)
