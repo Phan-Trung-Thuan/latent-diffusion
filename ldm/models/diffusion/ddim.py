@@ -430,10 +430,10 @@ class DDIMSampler(object):
                 if conditioning.shape[0] != batch_size:
                     print(f"Warning: Got {conditioning.shape[0]} conditionings but batch-size is {batch_size}")
 
-        time_range = np.flip(num_steps)
 
         self.make_schedule(ddim_num_steps=num_steps, ddim_eta=eta, verbose=verbose)
         total_steps = self.ddim_timesteps.shape[0]
+        time_range = np.flip(self.ddim_timesteps)
 
         # sampling
         device = conditioning.device
@@ -480,5 +480,5 @@ class DDIMSampler(object):
 
         for i, slice in zip(range(0, panorama_shape[-1], int(w * (1 - overlap_ratio))), slice_list):
             J[..., i:i+w] = slice
-            
+
         return J
