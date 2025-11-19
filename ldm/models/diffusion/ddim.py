@@ -490,7 +490,7 @@ class DDIMSampler(object):
                 slice_list[i][..., :overlap_w] = swap_zone
 
             # Xử lý Reference-Guided Latent Swap
-            if n <= total_steps * 0.8:
+            if n <= total_steps * 0.5:
                 for i in range(1, len(slice_list)):
                     mid_0 = self._mid(slice_list[0], overlap_ratio)
                     mid_i = self._mid(slice_list[i], overlap_ratio)
