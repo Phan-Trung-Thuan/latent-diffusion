@@ -74,7 +74,7 @@ if __name__ == "__main__":
     sampler = DDIMSampler(model)
 
     uc = model.get_learned_conditioning([""])
-    c = model.get_learned_conditioning(["a beautiful landscape with grass, trees, mountains and sky"])
+    c = model.get_learned_conditioning(["A photo of Chinese ink a vibrank landscape with famers, tourists, animal, mountains and traditional buildings"])
 
     panorama_latent = sampler.lsjd_sample(
         num_steps=100,
