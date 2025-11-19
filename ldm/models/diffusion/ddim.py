@@ -390,7 +390,7 @@ class DDIMSampler(object):
         return x[..., overlap_w:-overlap_w]
 
    
-    def _swap(x1: torch.Tensor, x2: torch.Tensor, direction: str = 'horizontal') -> torch.Tensor:
+    def _swap(x1: torch.Tensor, x2: torch.Tensor, is_horizontal: bool = True) -> torch.Tensor:
         """
         Hàm Swap linh hoạt: X_new = W_swap * X1 + (1 - W_swap) * X2
         Tạo pattern 0/1 theo khối dọc theo chiều ngang (W) hoặc chiều dọc (H).
@@ -404,10 +404,10 @@ class DDIMSampler(object):
         device = x1.device
 
         # 1. XÁC ĐỊNH CHIỀU CẦN SWAP (L)
-        if direction == 'vertical':
+        if not is_horizontal:
             L = H # Swap theo chiều dọc (Height)
             target_shape = (1, 1, H, 1)
-        elif direction == 'horizontal':
+        elif is_horizontal:
             L = W # Swap theo chiều ngang (Width)
             target_shape = (1, 1, 1, W)
         else:
@@ -481,7 +481,7 @@ class DDIMSampler(object):
             for i in range(1, len(slice_list)):
                 right_prev_i = self._right(slice_list[i - 1], overlap_ratio)
                 left_i = self._left(slice_list[i], overlap_ratio)
-                swap_zone = self._swap(left_i, right_prev_i, direction='horizontal')
+                swap_zone = self._swap(left_i, right_prev_i, is_horizontal=True)
 
                 overlap_w = int(w * overlap_ratio)
                 # Cập nhật phần bên phải của slice i-1
@@ -494,7 +494,7 @@ class DDIMSampler(object):
                 for i in range(1, len(slice_list)):
                     mid_0 = self._mid(slice_list[0], overlap_ratio)
                     mid_i = self._mid(slice_list[i], overlap_ratio)
-                    swap_zone = self._swap(mid_0, mid_i, direction='vertical')
+                    swap_zone = self._swap(mid_0, mid_i, is_horizontal=False)
 
                     overlap_w = int(w * overlap_ratio)
                     # Cập nhật phần giữa của slice i
