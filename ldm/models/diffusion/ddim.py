@@ -390,22 +390,34 @@ class DDIMSampler(object):
         return x[..., overlap_w:-overlap_w]
 
    
-    def _swap(self, x1, x2, slice_index: int, w_swap: int = 1) -> torch.Tensor:
+    def _swap(self, x1, x2, w_swap: int = 1) -> torch.Tensor:
         """
-        Hàm Swap: X_new = W_swap * X1 + (1 - W_swap) * X2 theo Eq. 10.
+        Hàm Swap: X_new = W_swap * X1 + (1 - W_swap) * X2
+        Tạo pattern 0/1 theo chiều rộng W của latent (dimension -1).
         """
+        B, C, H, W = x1.shape
         device = x1.device
-        i = slice_index + 1
+
+        # 1. Tạo chỉ số i từ 1 đến W
+        # i sẽ là [1, 2, ..., W]
+        i_indices = torch.arange(1, W + 1, device=device).float()
         
-        if w_swap == 0: w_swap = 1 
-        pattern_val = (i - 1) // w_swap 
-        v_m_scalar = 0.5 * (1 - ((-1) ** pattern_val))
+        # 2. Tính toán pattern_val = floor((i - 1) / w)
+        # pattern_val sẽ tạo ra các khối giá trị giống nhau có độ dài w
+        pattern_val = torch.floor((i_indices - 1) / w_swap)
         
-        W_swap = torch.full_like(x1, v_m_scalar).to(device)
-        print(W_swap.shape, W_swap)
+        # 3. Tính toán v_m (vector trọng số 0/1)
+        # v_m_i = 0.5 * (1 - (-1)^(pattern_val))
+        # Kết quả là một vector 1D xen kẽ 0 và 1 theo khối w
+        v_m = 0.5 * (1.0 - ((-1.0) ** pattern_val))
+        
+        # 4. Mở rộng (broadcast) W_swap để khớp với kích thước của latent (B, C, H, W)
+        # (Tạo một mask với pattern 0/1 lặp lại trên các chiều B, C, H)
+        W_swap = v_m.view(1, 1, 1, W).expand(B, C, H, W)
+        
         W_swap_complement = 1.0 - W_swap
         
-        # print(slice_index, W_swap.shape, x1.shape, W_swap_complement.shape, x2.shape)
+        # 5. Phép trộn/Hoán đổi
         X_new = W_swap * x1 + W_swap_complement * x2
         return X_new
 
@@ -462,7 +474,7 @@ class DDIMSampler(object):
             for i in range(1, len(slice_list)):
                 right_prev_i = self._right(slice_list[i - 1], overlap_ratio)
                 left_i = self._left(slice_list[i], overlap_ratio)
-                swap_zone = self._swap(left_i, right_prev_i, i-1)
+                swap_zone = self._swap(left_i, right_prev_i)
 
                 overlap_w = int(w * overlap_ratio)
                 # Cập nhật phần bên phải của slice i-1
