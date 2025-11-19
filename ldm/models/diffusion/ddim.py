@@ -402,7 +402,7 @@ class DDIMSampler(object):
         v_m_scalar = 0.5 * (1 - ((-1) ** pattern_val))
         
         W_swap = torch.full_like(x1, v_m_scalar).to(device)
-        print(W_swap)
+        print(W_swap.shape, W_swap)
         W_swap_complement = 1.0 - W_swap
         
         # print(slice_index, W_swap.shape, x1.shape, W_swap_complement.shape, x2.shape)
