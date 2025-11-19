@@ -390,7 +390,7 @@ class DDIMSampler(object):
         return x[..., overlap_w:-overlap_w]
 
    
-    def _swap(x1: torch.Tensor, x2: torch.Tensor, is_horizontal: bool = True) -> torch.Tensor:
+    def _swap(self, x1: torch.Tensor, x2: torch.Tensor, is_horizontal: bool = True) -> torch.Tensor:
         """
         Hàm Swap linh hoạt: X_new = W_swap * X1 + (1 - W_swap) * X2
         Tạo pattern 0/1 theo khối dọc theo chiều ngang (W) hoặc chiều dọc (H).
