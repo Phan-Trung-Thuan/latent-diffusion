@@ -390,16 +390,15 @@ class DDIMSampler(object):
         return x[..., overlap_w:-overlap_w]
 
    
-    def _swap(x1: torch.Tensor, x2: torch.Tensor, w_swap: int = 1, direction: str = 'horizontal') -> torch.Tensor:
+    def _swap(x1: torch.Tensor, x2: torch.Tensor, direction: str = 'horizontal') -> torch.Tensor:
         """
         Hàm Swap linh hoạt: X_new = W_swap * X1 + (1 - W_swap) * X2
         Tạo pattern 0/1 theo khối dọc theo chiều ngang (W) hoặc chiều dọc (H).
         
         x1, x2: Tensor latent có shape (B, C, H, W)
-        w_swap: Kích thước của khối (block) sẽ được swap.
         direction: 'horizontal' (swap theo W) hoặc 'vertical' (swap theo H).
         """
-        if w_swap < 1: w_swap = 1
+        w_swap = 1
             
         B, C, H, W = x1.shape
         device = x1.device
