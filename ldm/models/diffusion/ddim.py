@@ -490,15 +490,15 @@ class DDIMSampler(object):
                 slice_list[i][..., :overlap_w] = swap_zone
 
             # Xử lý Reference-Guided Latent Swap
-            if n <= total_steps * 0.3:
-                for i in range(1, len(slice_list)):
-                    mid_0 = self._mid(slice_list[0], overlap_ratio)
-                    mid_i = self._mid(slice_list[i], overlap_ratio)
-                    swap_zone = self._swap(mid_0, mid_i, is_horizontal=False)
+            # if n <= total_steps * 0.3:
+            #     for i in range(1, len(slice_list)):
+            #         mid_0 = self._mid(slice_list[0], overlap_ratio)
+            #         mid_i = self._mid(slice_list[i], overlap_ratio)
+            #         swap_zone = self._swap(mid_0, mid_i, is_horizontal=False)
 
-                    overlap_w = int(w * overlap_ratio)
-                    # Cập nhật phần giữa của slice i
-                    slice_list[i][..., overlap_w:-overlap_w] = swap_zone
+            #         overlap_w = int(w * overlap_ratio)
+            #         # Cập nhật phần giữa của slice i
+            #         slice_list[i][..., overlap_w:-overlap_w] = swap_zone
 
         for i, slice in zip(range(0, panorama_shape[-1], int(w * (1 - overlap_ratio))), slice_list):
             J[..., i:i+w] = slice
