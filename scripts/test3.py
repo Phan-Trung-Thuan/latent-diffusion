@@ -74,16 +74,16 @@ if __name__ == "__main__":
     sampler = DDIMSampler(model)
 
     uc = model.get_learned_conditioning([""])
-    c = model.get_learned_conditioning(["a beautiful landscape with grass, trees, river, mountains and sky"])
+    c = model.get_learned_conditioning(["a beautiful landscape with grass, trees, mountains and sky"])
 
     panorama_latent = sampler.lsjd_sample(
         num_steps=100,
         tile_shape=[1, 4, 512 // 8, 512 // 8],
         num_slices=10,
         conditioning=c,
-        w_swap=1,
-        ref_guided_rate=0.25,
-        overlap_ratio=0.35,
+        w_swap=2,
+        ref_guided_rate=0.35,
+        overlap_ratio=0.25,
         unconditional_guidance_scale=4.5,
         unconditional_conditioning=uc
     )
