@@ -81,6 +81,8 @@ if __name__ == "__main__":
         tile_shape=[1, 4, 512 // 8, 512 // 8],
         num_slices=10,
         conditioning=c,
+        w_swap=4,
+        ref_guided_rate=0.3,
         overlap_ratio=0.25,
         unconditional_guidance_scale=5.0,
         unconditional_conditioning=uc

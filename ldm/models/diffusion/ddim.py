@@ -390,39 +390,43 @@ class DDIMSampler(object):
         return x[..., overlap_w:-overlap_w]
 
    
-    def _swap(self, x1: torch.Tensor, x2: torch.Tensor, is_horizontal: bool = True) -> torch.Tensor:
+    def _swap(self, x1: torch.Tensor, x2: torch.Tensor, is_horizontal: bool = True, w_swap: int = 4) -> torch.Tensor:
         """
         Hàm Swap linh hoạt: X_new = W_swap * X1 + (1 - W_swap) * X2
         Tạo pattern 0/1 theo khối dọc theo chiều ngang (W) hoặc chiều dọc (H).
         
-        x1, x2: Tensor latent có shape (B, C, H, W)
-        direction: 'horizontal' (swap theo W) hoặc 'vertical' (swap theo H).
+        LƯU Ý: w_swap không được cố định, đã được thêm làm tham số.
         """
-        w_swap = 1
+        if w_swap < 1: 
+            w_swap = 1
             
         B, C, H, W = x1.shape
         device = x1.device
 
-        # 1. XÁC ĐỊNH CHIỀU CẦN SWAP (L)
+        # 1. XÁC ĐỊNH CHIỀU CẦN SWAP (L) và SHAPE TARGET
         if not is_horizontal:
             L = H # Swap theo chiều dọc (Height)
             target_shape = (1, 1, H, 1)
-        elif is_horizontal:
+        else: # is_horizontal == True
             L = W # Swap theo chiều ngang (Width)
             target_shape = (1, 1, 1, W)
-        else:
-            raise ValueError("Direction phải là 'horizontal' hoặc 'vertical'.")
 
+        # 2. TÍNH VECTOR TRỌNG SỐ 1D (W_SWAP_VECTOR)
         i_indices = torch.arange(1, L + 1, device=device).float()
         
+        # pattern_val = floor((i - 1) / w_swap)
         pattern_val = torch.floor((i_indices - 1) / w_swap)
         
+        # v_m_pattern: [0, 0, 1, 1, 0, 0, ...]
         v_m_pattern = 0.5 * (1.0 - ((-1.0) ** pattern_val))
         
+        # W_swap_vector: [1, 1, 0, 0, 1, 1, ...] (Đảm bảo khối đầu tiên lấy X1)
         W_swap_vector = 1.0 - v_m_pattern
 
+        # 3. MỞ RỘNG (BROADCAST) W_SWAP
         W_swap = W_swap_vector.view(target_shape).expand(B, C, H, W)
         
+        # 4. THỰC HIỆN PHÉP TRỘN/HOÁN ĐỔI
         W_swap_complement = 1.0 - W_swap
         X_new = W_swap * x1 + W_swap_complement * x2
         
@@ -435,6 +439,8 @@ class DDIMSampler(object):
                     num_slices: int,
                     conditioning: torch.Tensor,
                     overlap_ratio: float, 
+                    w_swap: int = 4,
+                    ref_guided_rate: float = 0.3,
                     unconditional_guidance_scale=1.,
                     unconditional_conditioning=None,
                     eta: float = 0.,
@@ -466,6 +472,9 @@ class DDIMSampler(object):
         # Lập qua mỗi slice theo overlap_ratio, ở mỗi bước lấy slice đó ra từ J, 
         slice_list = [J[..., i:i+w] for i in range(0, panorama_shape[-1], int(w * (1 - overlap_ratio)))][:num_slices]
 
+        # Xác định bước dừng cho Reference-Guided Swap
+        ref_guided_stop_step = int(total_steps * ref_guided_rate)
+
         iterator = tqdm(time_range, desc='DDIM Sampler', total=total_steps)
         for n, step in enumerate(iterator):
             ts = torch.full((batch_size,), step, device=device, dtype=torch.long)
@@ -474,32 +483,40 @@ class DDIMSampler(object):
             # Khử nhiễu từng slice
             for i in range(len(slice_list)):
                 slice_list[i], _ = self.p_sample_ddim(slice_list[i], conditioning, ts, index,
-                                          unconditional_guidance_scale=unconditional_guidance_scale,
-                                          unconditional_conditioning=unconditional_conditioning)
+                                                      unconditional_guidance_scale=unconditional_guidance_scale,
+                                                      unconditional_conditioning=unconditional_conditioning)
             
-            # Xử lý Self-Loop Latent Swap
+            # 1. Xử lý Self-Loop Latent Swap (Ở VÙNG CHỒNG LẤN)
             for i in range(1, len(slice_list)):
                 right_prev_i = self._right(slice_list[i - 1], overlap_ratio)
                 left_i = self._left(slice_list[i], overlap_ratio)
-                swap_zone = self._swap(left_i, right_prev_i, is_horizontal=True)
+                
+                # SỬA LỖI: Truyền w_swap vào hàm _swap
+                swap_zone = self._swap(left_i, right_prev_i, is_horizontal=True, w_swap=w_swap)
 
                 overlap_w = int(w * overlap_ratio)
-                # Cập nhật phần bên phải của slice i-1
+                # Cập nhật hai chiều
                 slice_list[i - 1][..., -overlap_w:] = swap_zone
-                # Cập nhật phần bên trái của slice i
                 slice_list[i][..., :overlap_w] = swap_zone
 
-            # Xử lý Reference-Guided Latent Swap
-            # if n <= total_steps * 0.3:
-            #     for i in range(1, len(slice_list)):
-            #         mid_0 = self._mid(slice_list[0], overlap_ratio)
-            #         mid_i = self._mid(slice_list[i], overlap_ratio)
-            #         swap_zone = self._swap(mid_0, mid_i, is_horizontal=False)
+            # 2. Xử lý Reference-Guided Latent Swap (Ở VÙNG KHÔNG CHỒNG LẤN)
+            if n < ref_guided_stop_step: # Chỉ thực hiện trong các bước khử nhiễu ban đầu
+                # Lát cắt đầu tiên (slice_list[0]) được dùng làm tham chiếu (X_ref)
+                for i in range(1, len(slice_list)):
+                    # Giả định _mid trả về phần giữa của lát cắt
+                    mid_ref = self._mid(slice_list[0], overlap_ratio)
+                    mid_i = self._mid(slice_list[i], overlap_ratio)
+                    
+                    # SỬA LỖI: Truyền w_swap. 
+                    # Giả định is_horizontal=True vì panorama là ngang.
+                    swap_zone = self._swap(mid_ref, mid_i, is_horizontal=True, w_swap=w_swap) 
 
-            #         overlap_w = int(w * overlap_ratio)
-            #         # Cập nhật phần giữa của slice i
-            #         slice_list[i][..., overlap_w:-overlap_w] = swap_zone
+                    # Cập nhật phần giữa của slice i (Hoán đổi một chiều: Ref -> Slice i)
+                    overlap_w = int(w * overlap_ratio)
+                    slice_list[i][..., overlap_w:-overlap_w] = swap_zone
 
+        # ... (Phần ghép slice cuối cùng giữ nguyên) ...
+        
         for i, slice in zip(range(0, panorama_shape[-1], int(w * (1 - overlap_ratio))), slice_list):
             J[..., i:i+w] = slice
 
