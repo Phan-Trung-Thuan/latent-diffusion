@@ -449,21 +449,9 @@ class DDIMSampler(object):
         
         batch_size, _, _, w = tile_shape
 
-        if conditioning is not None:
-            if isinstance(conditioning, dict):
-                cbs = conditioning[list(conditioning.keys())[0]].shape[0]
-                if cbs != batch_size:
-                    print(f"Warning: Got {cbs} conditionings but batch-size is {batch_size}")
-            else:
-                if conditioning.shape[0] != batch_size:
-                    print(f"Warning: Got {conditioning.shape[0]} conditionings but batch-size is {batch_size}")
-
-        if isinstance(conditioning, torch.Tensor):
-            conditioning = [conditioning] * num_slices
-        elif isinstance(conditioning, list(torch.Tensor)):
-            if len(conditioning) != num_slices:
-                print(f"Warning: number of conditioning ({len(conditioning)}) must equal number of slices ({num_slices})")
-
+        if conditioning.shape[0] != num_slices:
+            conditioning = conditioning.expand(num_slices, -1, -1)
+            
         self.make_schedule(ddim_num_steps=num_steps, ddim_eta=eta, verbose=verbose)
         total_steps = self.ddim_timesteps.shape[0]
         time_range = np.flip(self.ddim_timesteps)
