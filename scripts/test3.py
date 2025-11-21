@@ -78,7 +78,7 @@ if __name__ == "__main__":
     prompts.extend(["a beautiful landscape with tree, mountains and sky"] * 3)
     prompts.extend(["a beautiful landscape with lake, mountains and sky"] * 4)
     prompts.extend(["a beautiful landscape with grass, mountains and sky"] * 3)
-    c = model.get_learned_conditioning(["a beautiful landscape with tree, mountains and sky"])
+    c = model.get_learned_conditioning(prompts)
 
     panorama_latent = sampler.lsjd_sample(
         num_steps=200,
@@ -88,7 +88,7 @@ if __name__ == "__main__":
         w_swap=1,
         ref_guided_rate=0.0,
         overlap_ratio=0.25,
-        unconditional_guidance_scale=5,
+        unconditional_guidance_scale=4.5,
         unconditional_conditioning=uc
     )
 
