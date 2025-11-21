@@ -79,6 +79,7 @@ if __name__ == "__main__":
     prompts.extend(["a beautiful landscape with lake, mountains and sky"] * 4)
     prompts.extend(["a beautiful landscape with grass, mountains and sky"] * 3)
     c = model.get_learned_conditioning(prompts)
+    print(c)
 
     panorama_latent = sampler.lsjd_sample(
         num_steps=200,
