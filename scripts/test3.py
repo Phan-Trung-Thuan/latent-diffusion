@@ -76,8 +76,8 @@ if __name__ == "__main__":
     uc = model.get_learned_conditioning([""])
     prompts = []
     prompts.extend(["a lush green field"] * 2)
-    prompts.extend(["a dry grass field"] * 2)
-    prompts.extend(["deeper desert dunes"] * 2)
+    # prompts.extend(["a dry grass field"] * 2)
+    # prompts.extend(["deeper desert dunes"] * 2)
     prompts.extend(["a white sand beach"] * 2)
     prompts.extend(["wide open ocean"] * 2)
     c = model.get_learned_conditioning(prompts)
@@ -86,12 +86,12 @@ if __name__ == "__main__":
     panorama_latent = sampler.lsjd_sample(
         num_steps=200,
         tile_shape=[1, 4, 512 // 8, 512 // 8],
-        num_slices=10,
+        num_slices=6,
         conditioning=c,
         w_swap=1,
         ref_guided_rate=0.0,
         overlap_ratio=0.25,
-        unconditional_guidance_scale=4,
+        unconditional_guidance_scale=4.5,
         unconditional_conditioning=uc
     )
 
