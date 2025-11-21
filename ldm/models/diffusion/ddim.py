@@ -451,7 +451,7 @@ class DDIMSampler(object):
 
         if conditioning.shape[0] != num_slices:
             conditioning = conditioning.expand(num_slices, -1, -1)
-            
+
         self.make_schedule(ddim_num_steps=num_steps, ddim_eta=eta, verbose=verbose)
         total_steps = self.ddim_timesteps.shape[0]
         time_range = np.flip(self.ddim_timesteps)
@@ -475,6 +475,7 @@ class DDIMSampler(object):
 
             # Khử nhiễu từng slice
             for i in range(len(slice_list)):
+                print(conditioning[i].shape, unconditional_conditioning.shape)
                 slice_list[i], _ = self.p_sample_ddim(slice_list[i], conditioning[i], ts, index,
                                                       unconditional_guidance_scale=unconditional_guidance_scale,
                                                       unconditional_conditioning=unconditional_conditioning)
