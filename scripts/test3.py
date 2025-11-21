@@ -75,9 +75,9 @@ if __name__ == "__main__":
 
     uc = model.get_learned_conditioning([""])
     prompts = []
-    prompts.extend(["a field"] * 3)
-    prompts.extend(["a desert"] * 4)
-    prompts.extend(["an ocean"] * 3)
+    prompts.extend(["a lush green field under soft warm sunlight, gentle hills extending toward the center"] * 3)
+    prompts.extend(["deeper desert dunes, occasional rocky formations"] * 4)
+    prompts.extend(["wide open ocean extending to the horizon, calm waves, consistent sky"] * 3)
     c = model.get_learned_conditioning(prompts)
     # c = model.get_learned_conditioning(["a beautiful landscape with grass, mountains and sky"])
 
