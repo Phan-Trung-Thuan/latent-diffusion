@@ -523,7 +523,7 @@ class DDIMSampler(object):
         return J
     
     @torch.no_grad()
-    def lsjd_sample(self,
+    def lsjd_multi_sample(self,
                     num_steps: int,
                     tile_shape: tuple,
                     multi_prompts: dict,  # Ví dụ: {'prompt_1': {'W_start': 0, 'W_end': 512, 'text': 'grass', 'guidance': 7.5}, ...}
@@ -626,8 +626,8 @@ class DDIMSampler(object):
             
             # --- 3. Self-Loop Latent Swap (Giữ nguyên) ---
             for i in range(num_slices - 1):
-                right_prev_i = self._right(slice_list[i])
-                left_i_plus_1 = self._left(slice_list[i + 1])
+                right_prev_i = self._right(slice_list[i], overlap_ratio)
+                left_i_plus_1 = self._left(slice_list[i + 1], overlap_ratio)
                 swap_zone = self._swap(left_i_plus_1, right_prev_i, is_horizontal=True, w_swap=w_swap)
                 
                 overlap_w = int(w_slice * overlap_ratio)

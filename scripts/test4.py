@@ -119,8 +119,8 @@ if __name__ == "__main__":
     # 4. Chạy LSJD Multi-Prompt Sampler
     # Giả định sampler.lsjd_sample đã được sửa đổi để nhận multi_prompts
     print("\nBắt đầu lấy mẫu LSJD Multi-Prompt...")
-    panorama_latent = sampler.lsjd_sample(
-        num_steps=50, # Giảm bước để test nhanh
+    panorama_latent = sampler.lsjd_multi_sample(
+        num_steps=100, # Giảm bước để test nhanh
         tile_shape=[1, 4, latent_h, latent_w],
         multi_prompts=multi_prompts_data,
         overlap_ratio=OVERLAP_RATIO,
