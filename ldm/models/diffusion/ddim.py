@@ -521,3 +521,143 @@ class DDIMSampler(object):
             J[..., i:i+w] = slice
 
         return J
+    
+    @torch.no_grad()
+    def lsjd_sample(self,
+                    num_steps: int,
+                    tile_shape: tuple,
+                    multi_prompts: dict,  # Ví dụ: {'prompt_1': {'W_start': 0, 'W_end': 512, 'text': 'grass', 'guidance': 7.5}, ...}
+                    overlap_ratio: float, 
+                    w_swap: int = 4,
+                    ref_guided_rate: float = 0.3,
+                    eta: float = 0.,
+                    verbose: bool = False
+                    ):
+        
+        # 0. Thiết lập và Khởi tạo Conditioning
+        
+        # Lấy unconditional conditioning (uc) chung cho toàn bộ panorama
+        uncond_prompt = [""]
+        # Tên thuộc tính có thể khác nhau (ví dụ: self.model.cond_stage_model)
+        uc = self.model.get_learned_conditioning(uncond_prompt) 
+
+        # 1. Tiền xử lý và Lưu trữ Conditioning Vectors
+        # Dictionary mới lưu trữ các vector conditioning đã học (c) cho từng prompt
+        conditioning_vectors = {}
+        
+        for key, data in multi_prompts.items():
+            prompt = data['text']
+            # Lấy conditional conditioning (c) cho từng prompt
+            c = self.model.get_learned_conditioning([prompt])
+            
+            # Lưu trữ tất cả dữ liệu cần thiết: c, uc, guidance scale, và vị trí
+            conditioning_vectors[key] = {
+                'c': c,
+                'uc': uc, # Sử dụng uc chung
+                'guidance': data.get('guidance', 7.5),
+                'W_start': data['W_start'],
+                'W_end': data['W_end']
+            }
+            
+        # --- Phần còn lại của Logic Khởi tạo (Tính Panorama Width, J, slice_list) ---
+        
+        batch_size, _, _, w_slice = tile_shape
+        self.make_schedule(ddim_num_steps=num_steps, ddim_eta=eta, verbose=verbose)
+        total_steps = self.ddim_timesteps.shape[0]
+        time_range = np.flip(self.ddim_timesteps)
+        device = uc.device
+        
+        max_w_end = max(data['W_end'] for data in multi_prompts.values())
+        stride = int(w_slice * (1 - overlap_ratio))
+        
+        panorama_width = max_w_end 
+        num_slices = (panorama_width - w_slice) // stride + 1
+
+        panorama_shape = list(tile_shape)
+        panorama_shape[-1] = panorama_width 
+        J = torch.randn(panorama_shape).to(device)
+
+        start_points = [i * stride for i in range(num_slices)]
+        slice_list = [J[..., start_idx:start_idx+w_slice] for start_idx in start_points]
+
+        ref_guided_stop_step = int(total_steps * ref_guided_rate)
+
+        # 2. Vòng lặp Lấy mẫu DDIM
+        iterator = tqdm(time_range, desc='LSJD Multi-Prompt Sampler', total=total_steps)
+        for n, step in enumerate(iterator):
+            ts = torch.full((batch_size,), step, device=device, dtype=torch.long)
+            index = total_steps - n - 1
+
+            # --- Xử lý Khử nhiễu Đa Điều kiện ---
+            for i in range(len(slice_list)):
+                start_idx = start_points[i]
+                end_idx = start_idx + w_slice
+                
+                # 2a. Tìm Bộ Điều kiện cho Slice hiện tại (i)
+                # Áp dụng giải pháp trộn/lấy trung bình nếu có nhiều prompt chồng lấn
+                active_cond_data = [] 
+                
+                for data in conditioning_vectors.values():
+                    if start_idx < data['W_end'] and end_idx > data['W_start']:
+                        active_cond_data.append(data)
+
+                if active_cond_data:
+                    # 2b. TRỘN HOẶC CHỌN Điều kiện
+                    
+                    # GIẢI PHÁP ĐƠN GIẢN: CHỈ LẤY PROMPT ĐẦU TIÊN
+                    data = active_cond_data[0]
+                    active_conditioning = data['c']
+                    active_uncond = data['uc']
+                    active_guidance = data['guidance']
+                    
+                    # (GIẢI PHÁP NÂNG CAO: Trộn các vector c và uc, nhưng cần cân nhắc vùng chồng lấn)
+                    # ... (Logic phức tạp hơn nếu cần) ...
+                    
+                else:
+                    # Nếu không có prompt nào khớp
+                    active_conditioning = uc
+                    active_uncond = uc
+                    active_guidance = 1.0 # Guidance 1.0 = không điều kiện
+                
+                # 2c. Khử nhiễu (Dùng điều kiện đã tìm thấy)
+                slice_list[i], _ = self.p_sample_ddim(slice_list[i], active_conditioning, ts, index,
+                                                    unconditional_guidance_scale=active_guidance,
+                                                    unconditional_conditioning=active_uncond)
+            
+            # --- 3. Self-Loop Latent Swap (Giữ nguyên) ---
+            for i in range(num_slices - 1):
+                right_prev_i = self._right(slice_list[i])
+                left_i_plus_1 = self._left(slice_list[i + 1])
+                swap_zone = self._swap(left_i_plus_1, right_prev_i, is_horizontal=True, w_swap=w_swap)
+                
+                overlap_w = int(w_slice * overlap_ratio)
+                slice_list[i][..., -overlap_w:] = swap_zone
+                slice_list[i + 1][..., :overlap_w] = swap_zone
+
+            # --- 4. Reference-Guided Latent Swap (Giữ nguyên) ---
+            if n < ref_guided_stop_step:
+                for i in range(1, num_slices):
+                    mid_ref = self._mid(slice_list[0], overlap_ratio)
+                    mid_i = self._mid(slice_list[i], overlap_ratio)
+                    swap_zone = self._swap(mid_ref, mid_i, is_horizontal=True, w_swap=w_swap) 
+
+                    overlap_w = int(w_slice * overlap_ratio)
+                    mid_center = w_slice // 2
+                    start_w = mid_center - overlap_w // 2
+                    end_w = mid_center + overlap_w // 2
+                    
+                    slice_list[i][..., start_w:end_w] = swap_zone
+
+            # 5. Hợp nhất và DDIM Step (Giữ nguyên logic ghép slice)
+            J_pred = torch.zeros_like(J) 
+            current_pos = 0
+            for slice_x0 in slice_list:
+                start_w = current_pos
+                J_pred[..., start_w:start_w+w_slice] = slice_x0
+                current_pos += stride
+                
+            # ... (Thêm DDIM step nếu cần: J = self._ddim_step_forward(J_pred, J, index)) ...
+            
+            J = J_pred # Tạm thời gán J_pred cho J để tiếp tục vòng lặp
+
+        return J
