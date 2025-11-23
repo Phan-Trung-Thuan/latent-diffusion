@@ -91,7 +91,7 @@ if __name__ == "__main__":
         w_swap=1,
         ref_guided_rate=0.0,
         overlap_ratio=0.15,
-        unconditional_guidance_scale=2,
+        unconditional_guidance_scale=4,
         unconditional_conditioning=uc
     )
 
