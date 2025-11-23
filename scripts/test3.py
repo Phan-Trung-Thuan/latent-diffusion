@@ -79,7 +79,7 @@ if __name__ == "__main__":
     # prompts.extend(["a dry grass field"] * 2)
     # prompts.extend(["deeper desert dunes"] * 2)
     prompts.extend(["a white sand field with some green bushes"] * 2)
-    prompts.extend(["a white sand beach with"] * 2)
+    prompts.extend(["a white sand beach"] * 2)
     prompts.extend(["a blue ocean"] * 2)
     c = model.get_learned_conditioning(prompts)
     # c = model.get_learned_conditioning(["a beautiful landscape with grass, mountains and sky"])
@@ -92,7 +92,7 @@ if __name__ == "__main__":
         w_swap=1,
         ref_guided_rate=0.0,
         overlap_ratio=0.25,
-        unconditional_guidance_scale=4.5,
+        unconditional_guidance_scale=5,
         unconditional_conditioning=uc
     )
 
