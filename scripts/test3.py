@@ -79,7 +79,7 @@ if __name__ == "__main__":
     # prompts.extend(["a dry grass field"] * 2)
     # prompts.extend(["deeper desert dunes"] * 2)
     prompts.extend(["a white sand field with some green bushes"] * 2)
-    prompts.extend(["a white beach"] * 2)
+    prompts.extend(["a white wet sand field"] * 2)
     prompts.extend(["a realistic ocean"] * 2)
     c = model.get_learned_conditioning(prompts)
     # c = model.get_learned_conditioning(["a beautiful landscape with grass, mountains and sky"])
